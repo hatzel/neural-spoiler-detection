@@ -13,10 +13,10 @@ def main():
     )
     loader = DataLoader(dataset, batch_size=8, collate_fn=PaddedBatch)
     classifier = BertForSequenceClassification\
-        .from_pretrained("bert-base-uncased", num_labels=2)
+        .from_pretrained("bert-base-uncased", num_labels=2).cuda()
     for batch in loader:
         with torch.no_grad():
-            print(classifier(batch.token_ids, batch.sequence_ids, batch.input_mask))
+            print(classifier(batch.token_ids.cuda(), batch.sequence_ids.cuda(), batch.input_mask.cuda()))
 
 
 def find_vocab(dataset, tokenizer):
