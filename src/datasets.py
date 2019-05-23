@@ -45,7 +45,7 @@ class TvTropesDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return (self.to_feature(self.texts[index]),
-                torch.tensor(self.labels[index]))
+                torch.tensor(self.labels[index], dtype=torch.long))
 
     @lru_cache(2 ** 14)
     def to_feature(self, text) -> TvTropesFeature:
