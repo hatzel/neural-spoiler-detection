@@ -1,3 +1,5 @@
+export PYTHONHASHSEED = 1
+
 run:
 	venv/bin/python src/main.py
 
