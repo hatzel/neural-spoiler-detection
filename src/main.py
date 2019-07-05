@@ -1,18 +1,8 @@
 import random
 
-import torch
-from tqdm import tqdm
-from sklearn import metrics
 from sklearn.model_selection import ParameterGrid
-from torch.utils.data import DataLoader
 import argparse
 
-from datasets import PaddedBatch
-from datasets import BinarySpoilerDataset
-from pytorch_pretrained_bert import (
-    BertTokenizer,
-    BertForSequenceClassification
-)
 import util
 from run import BertRun
 
