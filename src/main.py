@@ -25,6 +25,8 @@ def build_parser():
     parser.add_argument("--name", help="Give this run a nice name.")
     subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
     grid_search = subparsers.add_parser("grid-search")
+    test_mode = subparsers.add_parser("test", help="Test an existing model.")
+    test_mode.add_argument("model", help="Model to test against.")
     single_run = subparsers.add_parser("single-run")
     single_run.add_argument("--mode", default="binary", choices=["binary"])
     single_run.add_argument("--batch-size", default=8, type=int)
@@ -58,6 +60,10 @@ def main(args):
         )
         result = run.test()
         result.save(args.name)
+    elif args.run_mode == "test":
+        print(args.model)
+        run = BertRun.from_file(args.model, args.train_data, args.test_data)
+        run.test()
 
 
 if __name__ == "__main__":

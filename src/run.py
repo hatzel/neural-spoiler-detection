@@ -87,8 +87,11 @@ class BertRun():
         )
 
     @staticmethod
-    def from_file():
-        raise NotImplementedError()
+    def from_file(model_path, train_path, test_path):
+        run = BertRun.for_dataset(train_path, test_path)
+        data = torch.load(model_path)
+        run.classifier.load_state_dict(data)
+        return run
 
     @staticmethod
     def for_dataset(train_path, test_path):
