@@ -38,6 +38,7 @@ def main(args):
             print("Using these parameters: ", params)
             run = BertRun.for_dataset(args.train_data, args.test_data)
             run.train(**params)
+            util.seed(1)
             result = run.test()
             result.save(args.name)
     elif args.run_mode == "single-run":
@@ -48,11 +49,12 @@ def main(args):
             num_epochs=args.epochs,
             seed=args.seed,
         )
+        util.seed(1)
         result = run.test()
         result.save(args.name)
     elif args.run_mode == "test":
-        print(args.model)
         run = BertRun.from_file(args.model, args.train_data, args.test_data)
+        util.seed(1)
         run.test()
 
 
