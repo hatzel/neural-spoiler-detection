@@ -2,6 +2,7 @@ import random
 
 from sklearn.model_selection import ParameterGrid
 import argparse
+from torch.utils.tensorboard import SummaryWriter
 
 import util
 from run import BertRun
@@ -27,6 +28,7 @@ def build_parser():
 
 
 def main(args):
+    writer = SummaryWriter()
     if args.run_mode == "grid-search":
         parameter_grid = list(ParameterGrid({
             "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
@@ -37,20 +39,21 @@ def main(args):
         for params in parameter_grid:
             print("Using these parameters: ", params)
             run = BertRun.for_dataset(args.train_data, args.test_data)
-            run.train(**params)
+            run.train(writer=writer, **params)
             util.seed(1)
-            result = run.test()
+            result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
         run = BertRun.for_dataset(args.train_data, args.test_data)
         run.train(
+            writer=writer,
             batch_size=args.batch_size,
             lr=args.learning_rate,
             num_epochs=args.epochs,
             seed=args.seed,
         )
         util.seed(1)
-        result = run.test()
+        result = run.test(writer=writer)
         result.save(args.name)
     elif args.run_mode == "test":
         run = BertRun.from_file(args.model, args.train_data, args.test_data)

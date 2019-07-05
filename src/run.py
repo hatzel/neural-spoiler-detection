@@ -22,8 +22,9 @@ class BertRun():
             .from_pretrained("bert-base-uncased", num_labels=2).cuda()
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.training_parameters = []
+        self.num_batches = 0
 
-    def train(self, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
+    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
         if seed is not None:
             util.seed(seed)
         self.training_parameters.append({
@@ -51,14 +52,22 @@ class BertRun():
                     batch.input_mask.cuda()
                 )
                 loss = F.cross_entropy(output, batch.labels.cuda())
+                self.num_batches += 1
+                if writer:
+                    writer.add_scalar(
+                        "cross entropy loss per batch",
+                        loss,
+                        self.num_batches
+                    )
                 loss.backward()
                 optimizer.step()
 
-    def test(self):
-        loader = DataLoader(self.test_dataset, batch_size=8,
+    def test(self, writer=None):
+        loader = DataLoader(self.test_dataset, batch_size=1,
                             collate_fn=PaddedBatch)
         labels = []
         predicted = []
+        spoiler_probability = []
         for batch in tqdm(loader):
             with torch.no_grad():
                 output = self.classifier(
@@ -68,6 +77,15 @@ class BertRun():
                 )
                 labels.extend(batch.labels)
                 predicted.extend(list(output.argmax(1)))
+                spoiler_probability.append(
+                    torch.softmax(output, 1)[0, 1]
+                )
+        if writer:
+            writer.add_pr_curve(
+                "Precision Recall",
+                torch.tensor(labels),
+                torch.tensor(spoiler_probability)
+            )
         labels, predicted = (
             [t.item() for t in labels],
             [t.item() for t in predicted]
