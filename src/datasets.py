@@ -30,6 +30,7 @@ class TvTropesFeature:
 
 class BinarySpoilerDataset(torch.utils.data.Dataset):
     def __init__(self, file_name: str, tokenizer: BertTokenizer):
+        self.file_name: str = file_name
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
         self.texts: List[str] = []
