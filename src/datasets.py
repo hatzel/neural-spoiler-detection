@@ -28,7 +28,7 @@ class TvTropesFeature:
         return len(self.token_ids)
 
 
-class TvTropesDataset(torch.utils.data.Dataset):
+class BinarySpoilerDataset(torch.utils.data.Dataset):
     def __init__(self, file_name: str, tokenizer: BertTokenizer):
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
@@ -38,7 +38,7 @@ class TvTropesDataset(torch.utils.data.Dataset):
             for line in reader:
                 self.texts.append(line[0])
                 self.labels.append(True if line[1] == "True" else False)
-        super(TvTropesDataset, self).__init__()
+        super(BinarySpoilerDataset, self).__init__()
 
     def __len__(self):
         return len(self.labels)

@@ -6,9 +6,10 @@ from tqdm import tqdm
 from sklearn import metrics
 from sklearn.model_selection import ParameterGrid
 from torch.utils.data import DataLoader
+import argparse
 
 from datasets import PaddedBatch
-from datasets import TvTropesDataset
+from datasets import BinarySpoilerDataset
 from pytorch_pretrained_bert import (
     BertTokenizer,
     BertForSequenceClassification
@@ -16,17 +17,40 @@ from pytorch_pretrained_bert import (
 import util
 
 
-def main():
-    util.seed(42)
-    parameter_grid = list(ParameterGrid({
-        "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
-        "seed": [42, 43, 44],
-        "num_epochs": [3, 4, 5],
-    }))
-    random.shuffle(parameter_grid)
-    for params in parameter_grid:
-        print("Using these parameters: ", params)
-        tokenizer, classifier = train(**params)
+def build_parser():
+    parser = argparse.ArgumentParser(description="Spoiler Classificaiton")
+    parser.add_argument("--seed", default=42, type=int)
+    subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
+    grid_search = subparsers.add_parser("grid-search")
+    single_run = subparsers.add_parser("single-run")
+    single_run.add_argument("--mode", default="binary", choices=["binary"])
+    single_run.add_argument("--batch-size", default=8, type=int)
+    single_run.add_argument(
+        "--learning-rate", default=(1 * 10 ** -5), type=float)
+    single_run.add_argument("--epochs", default=3, type=int)
+    return parser
+
+
+def main(args):
+    print(args)
+    util.seed(args.seed)
+    if args.run_mode == "grid-search":
+        parameter_grid = list(ParameterGrid({
+            "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
+            "seed": [args.seed + n for n in range(3)],
+            "num_epochs": [3, 4, 5],
+        }))
+        random.shuffle(parameter_grid)
+        for params in parameter_grid:
+            print("Using these parameters: ", params)
+            tokenizer, classifier = train(**params)
+            test(tokenizer, classifier)
+    elif args.run_mode == "single-run":
+        tokenizer, classifier = train(
+            batch_size=args.batch_size,
+            lr=args.learning_rate,
+            num_epochs=args.epochs,
+        )
         test(tokenizer, classifier)
 
 
@@ -34,7 +58,7 @@ def train(batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
     if seed is not None:
         util.seed(seed)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    dataset = TvTropesDataset(
+    dataset = BinarySpoilerDataset(
         "../master-thesis/data/boyd2013spoiler/train.balanced.csv",
         tokenizer,
     )
@@ -65,7 +89,7 @@ def train(batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
 
 
 def test(tokenizer, classifier):
-    dataset = TvTropesDataset(
+    dataset = BinarySpoilerDataset(
         "../master-thesis/data/boyd2013spoiler/dev1.balanced.csv",
         tokenizer,
     )
@@ -93,4 +117,6 @@ def test(tokenizer, classifier):
 
 
 if __name__ == "__main__":
-    main()
+    parser = build_parser()
+    args = parser.parse_args()
+    main(args)
