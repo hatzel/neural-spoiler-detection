@@ -6,6 +6,7 @@ import torch.nn.utils.rnn as rnn
 import torch.utils.data
 from functools import lru_cache
 from dataclasses import dataclass
+from tqdm import tqdm
 from typing import List
 from pytorch_pretrained_bert import BertTokenizer
 
@@ -51,18 +52,22 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         self.file_name: str = file_name
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
-        self.texts: List[str] = []
         format = guess_format(file_name)
+        self.saved_data = {}
         with open(file_name, "r") as file:
             if format == FileType.CSV:
                 reader = csv.reader(file)
-                for line in reader:
-                    self.texts.append(line[0])
+                for n, line in enumerate(
+                    tqdm(reader, desc="Loading json dataset")
+                ):
+                    self.saved_data[str(n)] = self.to_feature(line[0]),
                     self.labels.append(True if line[1] == "True" else False)
             else:
-                for line in file:
+                for n, line in enumerate(
+                    tqdm(file, desc="Loading json dataset")
+                ):
                     data = json.loads(line)
-                    self.texts.append(data["text"])
+                    self.saved_data[str(n)] = self.to_feature(data["text"]),
                     self.labels.append(data["spoiler"])
         super(BinarySpoilerDataset, self).__init__()
 
@@ -70,10 +75,11 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         return len(self.labels)
 
     def __getitem__(self, index):
-        return (self.to_feature(self.texts[index]),
-                torch.tensor(self.labels[index], dtype=torch.long))
+        return (
+            self.saved_data[str(index)][0],
+            torch.tensor(self.labels[index], dtype=torch.long)
+        )
 
-    @lru_cache(2 ** 14)
     def to_feature(self, text) -> TvTropesFeature:
         tokens = ["[CLS]"]
         tokens.extend(self.tokenizer.tokenize(text)[:498])
