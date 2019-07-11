@@ -1,4 +1,6 @@
 import csv
+import json
+from enum import Enum
 import torch
 import torch.nn.utils.rnn as rnn
 import torch.utils.data
@@ -6,6 +8,11 @@ from functools import lru_cache
 from dataclasses import dataclass
 from typing import List
 from pytorch_pretrained_bert import BertTokenizer
+
+
+class FileType(Enum):
+    JSON = 1
+    CSV = 2
 
 
 class Task:
@@ -17,6 +24,17 @@ class Task:
 
     def dev_set():
         pass
+
+
+def guess_format(file_name, limit=10):
+    f = open(file_name, "r")
+    if all(
+        line.startswith("{") and "}" in line
+        for _, line in zip(range(limit), f)
+    ):
+        return FileType.JSON
+    else:
+        return FileType.CSV
 
 
 @dataclass
@@ -34,11 +52,18 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
         self.texts: List[str] = []
+        format = guess_format(file_name)
         with open(file_name, "r") as file:
-            reader = csv.reader(file)
-            for line in reader:
-                self.texts.append(line[0])
-                self.labels.append(True if line[1] == "True" else False)
+            if format == FileType.CSV:
+                reader = csv.reader(file)
+                for line in reader:
+                    self.texts.append(line[0])
+                    self.labels.append(True if line[1] == "True" else False)
+            else:
+                for line in file:
+                    data = json.loads(line)
+                    self.texts.append(data["text"])
+                    self.labels.append(data["spoiler"])
         super(BinarySpoilerDataset, self).__init__()
 
     def __len__(self):
@@ -51,7 +76,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
     @lru_cache(2 ** 14)
     def to_feature(self, text) -> TvTropesFeature:
         tokens = ["[CLS]"]
-        tokens.extend(self.tokenizer.tokenize(text))
+        tokens.extend(self.tokenizer.tokenize(text)[:498])
         tokens.append("[SEP]")
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         sentence_ids = torch.tensor([0 for _ in token_ids])
