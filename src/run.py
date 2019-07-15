@@ -3,8 +3,9 @@ from tqdm import tqdm
 
 from pytorch_pretrained_bert import (
     BertTokenizer,
-    BertForSequenceClassification
+    BertForSequenceClassification,
 )
+from pytorch_pretrained_bert.optimization import BertAdam
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from sklearn import metrics
@@ -34,7 +35,7 @@ class BertRun():
             "num_epochs": num_epochs,
             "seed": seed,
         })
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = BertAdam(
             self.classifier.parameters(recurse=True),
             lr=lr
         )
