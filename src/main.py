@@ -14,6 +14,7 @@ def build_parser():
     parser.add_argument("--train-data", required=True)
     parser.add_argument("--test-data", required=True)
     parser.add_argument("--name", help="Give this run a nice name.")
+    parser.add_argument("--limit", help="Limit test and train dataset to a specifc number of samples", type=int, default=None)
     subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
     grid_search = subparsers.add_parser("grid-search")
     test_mode = subparsers.add_parser("test", help="Test an existing model.")
@@ -44,7 +45,7 @@ def main(args):
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
-        run = BertRun.for_dataset(args.train_data, args.test_data)
+        run = BertRun.for_dataset(args.train_data, args.test_data, limit=args.limit)
         run.train(
             writer=writer,
             batch_size=args.batch_size,

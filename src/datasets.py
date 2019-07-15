@@ -48,7 +48,7 @@ class TvTropesFeature:
 
 
 class BinarySpoilerDataset(torch.utils.data.Dataset):
-    def __init__(self, file_name: str, tokenizer: BertTokenizer):
+    def __init__(self, file_name: str, tokenizer: BertTokenizer, limit=None):
         self.file_name: str = file_name
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
@@ -60,12 +60,16 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
                 for n, line in enumerate(
                     tqdm(reader, desc="Loading json dataset")
                 ):
+                    if n == limit:
+                        break
                     self.saved_data[str(n)] = self.to_feature(line[0]),
                     self.labels.append(True if line[1] == "True" else False)
             else:
                 for n, line in enumerate(
                     tqdm(file, desc="Loading json dataset")
                 ):
+                    if n == limit:
+                        break
                     data = json.loads(line)
                     self.saved_data[str(n)] = self.to_feature(data["text"]),
                     self.labels.append(data["spoiler"])

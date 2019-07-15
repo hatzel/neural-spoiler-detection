@@ -112,14 +112,16 @@ class BertRun():
         return run
 
     @staticmethod
-    def for_dataset(train_path, test_path):
+    def for_dataset(train_path, test_path, limit=None):
         tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         train_dataset = BinarySpoilerDataset(
             train_path,
             tokenizer,
+            limit=limit,
         )
         test_dataset = BinarySpoilerDataset(
             test_path,
             tokenizer,
+            limit=limit,
         )
         return BertRun(train_dataset, test_dataset)
