@@ -52,6 +52,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         self.file_name: str = file_name
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
+        self.clipped_count = 0
         format = guess_format(file_name)
         self.saved_data = {}
         with open(file_name, "r") as file:
@@ -73,6 +74,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
                     data = json.loads(line)
                     self.saved_data[str(n)] = self.to_feature(data["text"]),
                     self.labels.append(data["spoiler"])
+        print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
 
     def __len__(self):
@@ -86,7 +88,10 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
 
     def to_feature(self, text) -> TvTropesFeature:
         tokens = ["[CLS]"]
-        tokens.extend(self.tokenizer.tokenize(text)[:498])
+        tokenized_text = self.tokenizer.tokenize(text)
+        if len(tokenized_text) > 498:
+            self.clipped_count += 1
+        tokens.extend(tokenized_text[:498])
         tokens.append("[SEP]")
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         sentence_ids = torch.tensor([0 for _ in token_ids])
