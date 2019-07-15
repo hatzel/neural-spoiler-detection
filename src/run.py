@@ -81,8 +81,8 @@ class BertRun():
                 )
                 labels.extend(batch.labels)
                 predicted.extend(list(output.argmax(1)))
-                spoiler_probability.append(
-                    torch.softmax(output, 1)[0, 1]
+                spoiler_probability.extend(
+                    list(torch.softmax(output, 1)[:, 1])
                 )
         if writer:
             writer.add_pr_curve(
