@@ -8,6 +8,7 @@ from pytorch_pretrained_bert import (
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from sklearn import metrics
+from apex import amp
 
 from result import Result
 from datasets import BinarySpoilerDataset, PaddedBatch
@@ -33,6 +34,11 @@ class BertRun():
             "num_epochs": num_epochs,
             "seed": seed,
         })
+        self.optimizer = torch.optim.Adam(
+            self.classifier.parameters(recurse=True),
+            lr=lr
+        )
+        self.classifier, self.optimizer = amp.initialize(self.classifier, self.optimizer, opt_level="O1")
         for epoch in range(num_epochs):
             loader = DataLoader(
                 self.train_dataset,
@@ -40,12 +46,8 @@ class BertRun():
                 collate_fn=PaddedBatch,
                 shuffle=True
             )
-            optimizer = torch.optim.Adam(
-                self.classifier.parameters(recurse=True),
-                lr=lr
-            )
             for batch in tqdm(loader):
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 output = self.classifier(
                     batch.token_ids.cuda(),
                     batch.sequence_ids.cuda(),
@@ -59,11 +61,12 @@ class BertRun():
                         loss,
                         self.num_batches
                     )
-                loss.backward()
-                optimizer.step()
+                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                self.optimizer.step()
 
     def test(self, writer=None):
-        loader = DataLoader(self.test_dataset, batch_size=1,
+        loader = DataLoader(self.test_dataset, batch_size=8,
                             collate_fn=PaddedBatch)
         labels = []
         predicted = []
