@@ -17,14 +17,15 @@ import util
 
 
 class BertRun():
-    def __init__(self, train_dataset, test_dataset):
+    def __init__(self, train_dataset, test_dataset, base_model):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.classifier = BertForSequenceClassification\
-            .from_pretrained("bert-base-uncased", num_labels=2).cuda()
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            .from_pretrained(base_model, num_labels=2).cuda()
+        self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
         self.num_batches = 0
+        self.base_model = base_model
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
         if seed is not None:
@@ -34,6 +35,7 @@ class BertRun():
             "lr": lr,
             "num_epochs": num_epochs,
             "seed": seed,
+            "base_model": self.base_model,
         })
         self.optimizer = BertAdam(
             self.classifier.parameters(recurse=True),
@@ -109,15 +111,15 @@ class BertRun():
         )
 
     @staticmethod
-    def from_file(model_path, train_path, test_path):
-        run = BertRun.for_dataset(train_path, test_path)
+    def from_file(model_path, train_path, test_path, limit=None):
+        run = BertRun.for_dataset(train_path, test_path, limit=limit)
         data = torch.load(model_path)
         run.classifier.load_state_dict(data)
         return run
 
     @staticmethod
-    def for_dataset(train_path, test_path, limit=None):
-        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    def for_dataset(train_path, test_path, base_model, limit=None):
+        tokenizer = BertTokenizer.from_pretrained(base_model)
         train_dataset = BinarySpoilerDataset(
             train_path,
             tokenizer,

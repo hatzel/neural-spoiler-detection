@@ -14,6 +14,7 @@ def build_parser():
     parser.add_argument("--train-data", required=True)
     parser.add_argument("--test-data", required=True)
     parser.add_argument("--name", help="Give this run a nice name.")
+    parser.add_argument("--base-model", help="Which BERT model to perform fine tuning on.", default="bert-base-cased")
     parser.add_argument("--limit", help="Limit test and train dataset to a specifc number of samples", type=int, default=None)
     subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
     grid_search = subparsers.add_parser("grid-search")
@@ -39,13 +40,13 @@ def main(args):
         random.shuffle(parameter_grid)
         for params in parameter_grid:
             print("Using these parameters: ", params)
-            run = BertRun.for_dataset(args.train_data, args.test_data)
+            run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model)
             run.train(writer=writer, **params)
             util.seed(1)
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
-        run = BertRun.for_dataset(args.train_data, args.test_data, limit=args.limit)
+        run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model, limit=args.limit)
         run.train(
             writer=writer,
             batch_size=args.batch_size,
@@ -57,7 +58,7 @@ def main(args):
         result = run.test(writer=writer)
         result.save(args.name)
     elif args.run_mode == "test":
-        run = BertRun.from_file(args.model, args.train_data, args.test_data)
+        run = BertRun.from_file(args.model, args.train_data, args.test_data, limit=args.limit)
         util.seed(1)
         run.test()
 
