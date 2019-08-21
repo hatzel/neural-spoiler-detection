@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from tqdm import tqdm
 from typing import List
 from pytorch_pretrained_bert import BertTokenizer
+import xml.etree.ElementTree as ElementTree
 
 
 class FileType(Enum):
@@ -38,10 +39,30 @@ def guess_format(file_name, limit=10):
         return FileType.CSV
 
 
+def iter_text_is_spoiler(root):
+    for el in root.iter():
+        if el.tag == "spoiler":
+            yield (el.text, True)
+        else:
+            yield (el.text, False)
+        if el.tail:
+            yield (el.tail, False)
+
+
 @dataclass
 class TvTropesFeature:
     token_ids: torch.Tensor
     sentence_ids: torch.Tensor
+
+    def __len__(self):
+        return len(self.token_ids)
+
+
+@dataclass
+class TokenFeature:
+    token_ids: torch.Tensor
+    sentence_ids: torch.Tensor
+    labels: torch.Tensor
 
     def __len__(self):
         return len(self.token_ids)
@@ -72,7 +93,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
                     if n == limit:
                         break
                     data = json.loads(line)
-                    self.saved_data[str(n)] = self.to_feature(data["text"]),
+                    self.saved_data[str(n)] = self.to_feature(data["text"])
                     self.labels.append(data["spoiler"])
         print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
@@ -82,7 +103,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return (
-            self.saved_data[str(index)][0],
+            self.saved_data[str(index)],
             torch.tensor(self.labels[index], dtype=torch.long)
         )
 
@@ -98,6 +119,50 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         return TvTropesFeature(
             token_ids=token_ids,
             sentence_ids=sentence_ids,
+        )
+
+
+class TokenSpoilerDataset(BinarySpoilerDataset):
+    def  __init__(self, file_name: str, tokenizer: BertTokenizer, limit=None):
+        self.file_name: str = file_name
+        self.tokenizer = tokenizer
+        self.labels: List[torch.Tensor] = []
+        self.clipped_count = 0
+        self.saved_data = {}
+        with open(file_name, "r") as file:
+            for n, line in enumerate(
+                tqdm(file, desc="Loading json dataset")
+            ):
+                if n == limit:
+                    break
+                data = json.loads(line)
+                self.saved_data[str(n)] = self.to_feature(data["text"])
+                self.labels.append(self.saved_data[str(n)].labels)
+        print(f"Clipped {self.clipped_count} posts.")
+        super(BinarySpoilerDataset, self).__init__()
+
+    def to_feature(self, text) -> TokenFeature:
+        tokens = ["[CLS]"]
+        root = ElementTree.fromstring(f"<data>{text}</data>")
+        spoiler_bools = []
+        tokenized_text = []
+        for el_text, is_spoiler in iter_text_is_spoiler(root):
+            if el_text:
+                tokenized_el = self.tokenizer.tokenize(el_text)
+                for word in tokenized_el:
+                    tokenized_text.append(word)
+                    spoiler_bools.append(is_spoiler)
+        if len(tokenized_text) > 498:
+            self.clipped_count += 1
+        spoiler_bools = [False] + spoiler_bools[:498] + [False]
+        tokens.extend(tokenized_text[:498])
+        tokens.append("[SEP]")
+        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        sentence_ids = torch.tensor([0 for _ in token_ids])
+        return TokenFeature(
+            token_ids=token_ids,
+            sentence_ids=sentence_ids,
+            labels=torch.tensor(spoiler_bools),
         )
 
 
@@ -120,7 +185,13 @@ class PaddedBatch:
         for i, el in enumerate(transposed[0]):
             self.input_mask[i][len(el):] = 0
 
-        self.labels = torch.stack(transposed[1], 0)
+        if len(transposed[1][0].shape) == 0:
+            self.labels = torch.stack(transposed[1], 0)
+        else:
+            size = max(len(el) for el in transposed[1])
+            self.labels = torch.zeros(len(transposed[1]), size, dtype=torch.long)
+            for i, el in enumerate(transposed[1]):
+                self.labels[i][:len(el)] = el
 
     def __repr__(self):
         return f"<PaddedBatch labels={self.labels}>"

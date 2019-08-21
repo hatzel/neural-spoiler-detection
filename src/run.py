@@ -4,6 +4,7 @@ from tqdm import tqdm
 from pytorch_pretrained_bert import (
     BertTokenizer,
     BertForSequenceClassification,
+    BertForTokenClassification,
 )
 from pytorch_pretrained_bert.optimization import BertAdam
 from torch.utils.data import DataLoader
@@ -12,15 +13,21 @@ from sklearn import metrics
 from apex import amp
 
 from result import Result
-from datasets import BinarySpoilerDataset, PaddedBatch
+from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
 import util
 
 
 class BertRun():
-    def __init__(self, train_dataset, test_dataset, base_model):
+    def __init__(self, train_dataset, test_dataset, base_model, token_based=False):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
-        self.classifier = BertForSequenceClassification\
+        self.token_based = token_based
+        bert_model = (
+            BertForTokenClassification
+            if token_based
+            else BertForSequenceClassification
+        )
+        self.classifier = bert_model\
             .from_pretrained(base_model, num_labels=2).cuda()
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
@@ -54,9 +61,13 @@ class BertRun():
                 output = self.classifier(
                     batch.token_ids.cuda(),
                     batch.sequence_ids.cuda(),
-                    batch.input_mask.cuda()
+                    batch.input_mask.cuda(),
+                    # labels=batch.labels.cuda() if self.token_based else None,
                 )
-                loss = F.cross_entropy(output, batch.labels.cuda())
+                if self.token_based:
+                    loss = output
+                else:
+                    loss = F.cross_entropy(output, batch.labels.cuda())
                 self.num_batches += 1
                 if writer:
                     writer.add_scalar(
@@ -81,11 +92,20 @@ class BertRun():
                     batch.sequence_ids.cuda(),
                     batch.input_mask.cuda()
                 )
-                labels.extend(batch.labels)
-                predicted.extend(list(output.argmax(1)))
-                spoiler_probability.extend(
-                    list(torch.softmax(output, 1)[:, 1])
-                )
+                if self.token_based:
+                    # Essentially we merge all examples together here
+                    # That means the accuracy is to be understood globally across all tokens
+                    labels.extend(batch.labels.reshape(-1))
+                    predicted.extend(output.argmax(2).reshape(-1))
+                    spoiler_probability.extend(
+                        torch.softmax(output.reshape(-1, 2), 1)[:, 1]
+                    )
+                else:
+                    labels.extend(batch.labels)
+                    predicted.extend(list(output.argmax(1)))
+                    spoiler_probability.extend(
+                        list(torch.softmax(output, 1)[:, 1])
+                    )
         if writer:
             writer.add_pr_curve(
                 "Precision Recall",
@@ -118,16 +138,28 @@ class BertRun():
         return run
 
     @staticmethod
-    def for_dataset(train_path, test_path, base_model, limit=None):
+    def for_dataset(train_path, test_path, base_model, limit=None, token_based=False):
         tokenizer = BertTokenizer.from_pretrained(base_model)
-        train_dataset = BinarySpoilerDataset(
-            train_path,
-            tokenizer,
-            limit=limit,
-        )
-        test_dataset = BinarySpoilerDataset(
-            test_path,
-            tokenizer,
-            limit=limit,
-        )
-        return BertRun(train_dataset, test_dataset)
+        if token_based:
+            train_dataset = TokenSpoilerDataset(
+                train_path,
+                tokenizer,
+                limit=limit,
+            )
+            test_dataset = TokenSpoilerDataset(
+                test_path,
+                tokenizer,
+                limit=limit,
+            )
+        else:
+            train_dataset = BinarySpoilerDataset(
+                train_path,
+                tokenizer,
+                limit=limit,
+            )
+            test_dataset = BinarySpoilerDataset(
+                test_path,
+                tokenizer,
+                limit=limit,
+            )
+        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based)

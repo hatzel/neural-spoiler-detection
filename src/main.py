@@ -13,6 +13,7 @@ def build_parser():
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--train-data", required=True)
     parser.add_argument("--test-data", required=True)
+    parser.add_argument("--token-based", action="store_true")
     parser.add_argument("--name", help="Give this run a nice name.")
     parser.add_argument("--base-model", help="Which BERT model to perform fine tuning on.", default="bert-base-cased")
     parser.add_argument("--limit", help="Limit test and train dataset to a specifc number of samples", type=int, default=None)
@@ -30,6 +31,7 @@ def build_parser():
 
 
 def main(args):
+    print(f"Token based: {args.token_based}")
     writer = SummaryWriter()
     if args.run_mode == "grid-search":
         parameter_grid = list(ParameterGrid({
@@ -46,7 +48,7 @@ def main(args):
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
-        run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model, limit=args.limit)
+        run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model, limit=args.limit, token_based=args.token_based)
         run.train(
             writer=writer,
             batch_size=args.batch_size,
