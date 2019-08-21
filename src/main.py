@@ -16,6 +16,7 @@ def build_parser():
     parser.add_argument("--token-based", action="store_true")
     parser.add_argument("--name", help="Give this run a nice name.")
     parser.add_argument("--base-model", help="Which BERT model to perform fine tuning on.", default="bert-base-cased")
+    parser.add_argument("--logdir", help="Tensorboard log directory")
     parser.add_argument("--limit", help="Limit test and train dataset to a specifc number of samples", type=int, default=None)
     subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
     grid_search = subparsers.add_parser("grid-search")
@@ -32,7 +33,7 @@ def build_parser():
 
 def main(args):
     print(f"Token based: {args.token_based}")
-    writer = SummaryWriter()
+    writer = SummaryWriter(args.logdir)
     if args.run_mode == "grid-search":
         parameter_grid = list(ParameterGrid({
             "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
