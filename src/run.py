@@ -108,10 +108,14 @@ class BertRun():
                     )
         if writer:
             writer.add_pr_curve(
-                "Precision Recall",
+                "precision_recall",
                 torch.tensor(labels),
                 torch.tensor(spoiler_probability)
             )
+            # Flush is not present in our pytorch version
+            # TODO: after upgrading pytorch replace with writer.flush()
+            for w in writer.all_writers.values():
+                w.flush()
         labels, predicted = (
             [t.item() for t in labels],
             [t.item() for t in predicted]
