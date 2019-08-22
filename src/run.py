@@ -62,10 +62,10 @@ class BertRun():
                     batch.token_ids.cuda(),
                     batch.sequence_ids.cuda(),
                     batch.input_mask.cuda(),
-                    # labels=batch.labels.cuda() if self.token_based else None,
+                    labels=batch.labels.cuda() if self.token_based else None,
                 )
                 if self.token_based:
-                    loss = output
+                    loss = output.sum()
                 else:
                     loss = F.cross_entropy(output, batch.labels.cuda())
                 self.num_batches += 1
