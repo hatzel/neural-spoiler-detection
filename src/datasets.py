@@ -143,7 +143,12 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
 
     def to_feature(self, text) -> TokenFeature:
         tokens = ["[CLS]"]
-        root = ElementTree.fromstring(f"<data>{text}</data>")
+        # Normalize xml parser chokes on this
+        text = text.replace('\x10', '')
+        try:
+            root = ElementTree.fromstring(f"<data>{text}</data>")
+        except ElementTree.ParseError:
+            print(f"Error parsing comment: {text}")
         spoiler_bools = []
         tokenized_text = []
         for el_text, is_spoiler in iter_text_is_spoiler(root):

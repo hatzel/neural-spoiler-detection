@@ -153,7 +153,7 @@ class BertRun():
             test_dataset = TokenSpoilerDataset(
                 test_path,
                 tokenizer,
-                limit=limit,
+                limit=5000,
             )
         else:
             train_dataset = BinarySpoilerDataset(
