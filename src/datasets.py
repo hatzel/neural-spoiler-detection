@@ -129,16 +129,17 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
         self.labels: List[torch.Tensor] = []
         self.clipped_count = 0
         self.saved_data = {}
-        with open(file_name, "r") as file:
-            for n, line in enumerate(
-                tqdm(file, desc="Loading json dataset")
-            ):
-                if n == limit:
-                    break
-                data = json.loads(line)
-                self.saved_data[str(n)] = self.to_feature(data["text"])
-                self.labels.append(self.saved_data[str(n)].labels)
-        print(f"Clipped {self.clipped_count} posts.")
+        if file_name:
+            with open(file_name, "r") as file:
+                for n, line in enumerate(
+                    tqdm(file, desc="Loading json dataset")
+                ):
+                    if n == limit:
+                        break
+                    data = json.loads(line)
+                    self.saved_data[str(n)] = self.to_feature(data["text"])
+                    self.labels.append(self.saved_data[str(n)].labels)
+            print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
 
     def to_feature(self, text) -> TokenFeature:
