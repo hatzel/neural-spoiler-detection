@@ -78,13 +78,16 @@ class BertRun():
                 with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                     scaled_loss.backward()
                 self.optimizer.step()
+            del loader
 
-    def test(self, writer=None):
+    def test(self, writer=None, results_file_name=None):
         loader = DataLoader(self.test_dataset, batch_size=8,
                             collate_fn=PaddedBatch)
         labels = []
         predicted = []
         spoiler_probability = []
+        if results_file_name:
+            results_file = open(results_file_name, "w")
         for batch in tqdm(loader):
             with torch.no_grad():
                 output = self.classifier(
@@ -100,6 +103,10 @@ class BertRun():
                     spoiler_probability.extend(
                         torch.softmax(output.reshape(-1, 2), 1)[:, 1]
                     )
+                    if results_file_name:
+                        self._write_examples(
+                            results_file, batch.token_ids, batch.labels, output
+                        )
                 else:
                     labels.extend(batch.labels)
                     predicted.extend(list(output.argmax(1)))
@@ -134,9 +141,43 @@ class BertRun():
             report=report,
         )
 
+    def _write_examples(self, results_file, token_ids, labels, output):
+        sentences = []
+        gold_labels = []
+        results = []
+        for sentence, gold, result in zip(token_ids, labels, output):
+            sentences.append([
+                self.tokenizer.ids_to_tokens[token.item()]
+                for token in sentence
+                if self.tokenizer.ids_to_tokens[token.item()] != "[PAD]"
+            ])
+            gold_labels.append(gold[:len(sentences[-1])])
+            results.append(
+                torch.softmax(result.reshape(-1, 2), 1)[:, 1][:len(sentences[-1])]
+            )
+        for gold, words, predict in zip(gold_labels, sentences, results):
+            results_file.write(
+                "\t".join(str(i) for i in gold.tolist()) + "\n"
+            )
+            results_file.write("\t".join(words) + "\n")
+            predictions_colored = []
+            for pred, g in zip(predict, gold):
+                if round(pred.item()) == g:
+                    predictions_colored.append(
+                        f"{pred.item():.2f}"
+                    )
+                else:
+                    predictions_colored.append(
+                        f"\u001b[31m{pred.item():.2f}\u001b[0m"
+                    )
+            results_file.write(
+                "\t".join(predictions_colored) + "\n"
+            )
+            results_file.write("\n\n")
+
     @staticmethod
-    def from_file(model_path, train_path, test_path, limit=None):
-        run = BertRun.for_dataset(train_path, test_path, limit=limit)
+    def from_file(model_path, train_path, test_path, base_model, token_based=False, limit=None):
+        run = BertRun.for_dataset(train_path, test_path, base_model, limit=limit, token_based=token_based)
         data = torch.load(model_path)
         run.classifier.load_state_dict(data)
         return run

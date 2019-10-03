@@ -13,6 +13,11 @@ def build_parser():
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--train-data", required=True)
     parser.add_argument("--test-data", required=True)
+    parser.add_argument(
+        "--results-file",
+        help="Store prediction results to a file (only in test mode for now).",
+        default="results.log"
+    )
     parser.add_argument("--token-based", action="store_true")
     parser.add_argument("--name", help="Give this run a nice name.")
     parser.add_argument("--base-model", help="Which BERT model to perform fine tuning on.", default="bert-base-cased")
@@ -61,9 +66,9 @@ def main(args):
         result = run.test(writer=writer)
         result.save(args.name)
     elif args.run_mode == "test":
-        run = BertRun.from_file(args.model, args.train_data, args.test_data, limit=args.limit)
+        run = BertRun.from_file(args.model, args.train_data, args.test_data, args.base_model, limit=args.limit, token_based=args.token_based)
         util.seed(1)
-        run.test()
+        run.test(results_file_name=args.results_file)
 
 
 if __name__ == "__main__":
