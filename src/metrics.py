@@ -3,7 +3,6 @@ Calculates the winPR and WindowDiff metrics.
 
 Implemented as described in the 2012 paper by Martin Scaiano and Diana Inkpen.
 
-TN = - \frac{k*(k+1)}{2} + \sum^N_{i=1-k} (k + 1 - max(R_{i,i+k}, C_{i,i+k}))
 """
 import math
 
