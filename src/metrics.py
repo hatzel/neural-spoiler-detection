@@ -25,9 +25,8 @@ def winpr(reference_labels, computed_labels, window_size=3):
         # The paper can be a bit confusing for this one
         # The window size is not equal to k but instead k = window_size + 1
         tns.append(
-            window_size + 1 - max(reference_boundaries, computed_boundaries)
+            len(reference_window) - 1 - max(reference_boundaries, computed_boundaries)
         )
-        print(reference_window, tns[-1], max(reference_boundaries, computed_boundaries))
         fps.append(max(0, computed_boundaries - reference_boundaries))
         fns.append(max(0, reference_boundaries - computed_boundaries))
         i += 1
@@ -35,7 +34,7 @@ def winpr(reference_labels, computed_labels, window_size=3):
     print(len(tns))
     print(sum(tns))
     tp = sum(tps)
-    tn = sum(tns) - (window_size + 1) * window_size
+    tn = sum(tns)
     fp = sum(fps)
     fn = sum(fns)
     results = {
