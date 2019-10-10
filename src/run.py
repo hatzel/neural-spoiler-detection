@@ -9,11 +9,12 @@ from pytorch_pretrained_bert import (
 from pytorch_pretrained_bert.optimization import BertAdam
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-from sklearn import metrics
+import sklearn
 from apex import amp
 
 from result import Result
 from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
+import metrics
 import util
 
 
@@ -84,7 +85,9 @@ class BertRun():
         loader = DataLoader(self.test_dataset, batch_size=8,
                             collate_fn=PaddedBatch)
         labels = []
+        labels_per_sample = []
         predicted = []
+        predicted_per_sample = []
         spoiler_probability = []
         if results_file_name:
             results_file = open(results_file_name, "w")
@@ -103,6 +106,8 @@ class BertRun():
                     spoiler_probability.extend(
                         torch.softmax(output.reshape(-1, 2), 1)[:, 1]
                     )
+                    predicted_per_sample.extend(batch.mask(output))
+                    labels_per_sample.extend(batch.mask(batch.labels))
                     if results_file_name:
                         self._write_examples(
                             results_file, batch.token_ids, batch.labels, output
@@ -130,9 +135,19 @@ class BertRun():
         # accuracy = metrics.accuracy_score(labels, predicted)
         # f1 = metrics.f1_score(labels, predicted)
         # confusion_matrix = metrics.confusion_matrix(labels, predicted)
-        print(metrics.classification_report(labels, predicted))
-        report = metrics.classification_report(
+        print(sklearn.metrics.classification_report(labels, predicted))
+        report = sklearn.metrics.classification_report(
             labels, predicted, output_dict=True)
+        labels_per_sample = [x[1:-1].cpu() for x in labels_per_sample]
+        predicted_per_sample = [x.argmax(-1)[1:-1].cpu() for x in predicted_per_sample]
+        report["windowdiff"] = metrics.windowdiff(
+            labels_per_sample, predicted_per_sample, window_size=3
+        )
+        print(f"Windowdiff: {report['windowdiff']}")
+        report["winpr"] = metrics.winpr(
+            labels_per_sample, predicted_per_sample, window_size=3
+        )
+        print(f"WinP: {report['winpr']['winP']}, WinR {report['winpr']['winR']}")
         return Result(
             training_parameters=self.training_parameters,
             train_dataset_path=self.train_dataset.file_name,

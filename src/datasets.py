@@ -199,5 +199,16 @@ class PaddedBatch:
             for i, el in enumerate(transposed[1]):
                 self.labels[i][:len(el)] = el
 
+    def mask(self, tensor):
+        # return [label[:x] for x in
+        result = []
+        for to_mask, mask in zip(tensor, self.input_mask):
+            try:
+                index = (mask == 0).nonzero().reshape(-1)[0]
+                result.append(to_mask[:index])
+            except IndexError:
+                result.append(to_mask)
+        return result
+
     def __repr__(self):
         return f"<PaddedBatch labels={self.labels}>"

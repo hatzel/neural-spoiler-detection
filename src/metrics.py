@@ -22,7 +22,6 @@ def winpr(reference_labels, computed_labels, window_size=3, average="micro"):
             too_many_labels = True
     else:
         all_labels = set(*reference_labels) | set(*computed_labels)
-        print(all_labels)
         if len(all_labels) > 2:
             too_many_labels = True
     if too_many_labels:
@@ -76,7 +75,6 @@ def windowdiff(reference_labels, computed_labels, window_size=5, average="micro"
             too_many_labels = True
     else:
         all_labels = set(*reference_labels) | set(*computed_labels)
-        print(all_labels)
         if len(all_labels) > 2:
             too_many_labels = True
     if too_many_labels:
@@ -96,13 +94,11 @@ def windowdiff(reference_labels, computed_labels, window_size=5, average="micro"
             computed_window = computed_example[i:i + window_size + 1]
             reference_boundaries = n_boundaries(reference_window)
             computed_boundaries = n_boundaries(computed_window)
-            print(reference_window, computed_window, reference_boundaries, computed_boundaries, computed_boundaries == reference_boundaries)
             if computed_boundaries == reference_boundaries:
                 correct += 1
             else:
                 errors += 1
             i += 1
-    print(f"Errors: {errors}, correct: {correct}, total: {correct + errors}")
     return errors / (correct + errors)
 
 
