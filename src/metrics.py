@@ -62,6 +62,50 @@ def winpr(reference_labels, computed_labels, window_size=3, average="micro"):
     return results
 
 
+def windowdiff(reference_labels, computed_labels, window_size=5, average="micro"):
+    if average != "micro":
+        raise Exception("Only the 'micro' averaging method is supported.")
+    if len(reference_labels) != len(computed_labels):
+        raise Exception("Sequences need to be of equal length.")
+    too_many_labels = False
+    if isinstance(reference_labels[0], torch.Tensor):
+        unique_labels = torch.unique(
+            torch.cat([*reference_labels, *computed_labels]).reshape(-1)
+        )
+        if len(unique_labels) > 2:
+            too_many_labels = True
+    else:
+        all_labels = set(*reference_labels) | set(*computed_labels)
+        print(all_labels)
+        if len(all_labels) > 2:
+            too_many_labels = True
+    if too_many_labels:
+        raise Exception(
+            "Segmentation data should only contain two labels"
+        )
+
+    correct = 0
+    errors = 0
+
+    for reference_example, computed_example in zip(reference_labels, computed_labels):
+        if len(reference_example) != len(computed_example):
+            raise Exception("Inner sequences need to be of equal length.")
+        i = 0
+        while i < len(computed_example) - window_size:
+            reference_window = reference_example[i:i + window_size + 1]
+            computed_window = computed_example[i:i + window_size + 1]
+            reference_boundaries = n_boundaries(reference_window)
+            computed_boundaries = n_boundaries(computed_window)
+            print(reference_window, computed_window, reference_boundaries, computed_boundaries, computed_boundaries == reference_boundaries)
+            if computed_boundaries == reference_boundaries:
+                correct += 1
+            else:
+                errors += 1
+            i += 1
+    print(f"Errors: {errors}, correct: {correct}, total: {correct + errors}")
+    return errors / (correct + errors)
+
+
 def n_boundaries(input):
     total = 0
     for i in range(len(input) - 1):
