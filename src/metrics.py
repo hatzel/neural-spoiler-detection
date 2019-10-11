@@ -61,7 +61,7 @@ def winpr(reference_labels, computed_labels, window_size=3, average="micro"):
     return results
 
 
-def windowdiff(reference_labels, computed_labels, window_size=5, average="micro"):
+def windowdiff(reference_labels, computed_labels, window_size=3, average="micro"):
     if average != "micro":
         raise Exception("Only the 'micro' averaging method is supported.")
     if len(reference_labels) != len(computed_labels):
@@ -89,9 +89,9 @@ def windowdiff(reference_labels, computed_labels, window_size=5, average="micro"
         if len(reference_example) != len(computed_example):
             raise Exception("Inner sequences need to be of equal length.")
         i = 0
-        while i < len(computed_example) - window_size:
-            reference_window = reference_example[i:i + window_size + 1]
-            computed_window = computed_example[i:i + window_size + 1]
+        while i < len(computed_example) - window_size + 1:
+            reference_window = reference_example[i:i + window_size]
+            computed_window = computed_example[i:i + window_size]
             reference_boundaries = n_boundaries(reference_window)
             computed_boundaries = n_boundaries(computed_window)
             if computed_boundaries == reference_boundaries:
