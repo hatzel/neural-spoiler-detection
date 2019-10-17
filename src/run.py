@@ -114,7 +114,7 @@ class BertRun():
                         )
                 else:
                     labels.extend(batch.labels)
-                    predicted.extend(list(output.argmax(1)))
+                    predicted.extend(list(output.cpu().argmax(1)))
                     spoiler_probability.extend(
                         list(torch.softmax(output, 1)[:, 1])
                     )
@@ -132,28 +132,75 @@ class BertRun():
             [t.item() for t in labels],
             [t.item() for t in predicted]
         )
-        # accuracy = metrics.accuracy_score(labels, predicted)
-        # f1 = metrics.f1_score(labels, predicted)
-        # confusion_matrix = metrics.confusion_matrix(labels, predicted)
-        print(sklearn.metrics.classification_report(labels, predicted))
-        report = sklearn.metrics.classification_report(
-            labels, predicted, output_dict=True)
-        labels_per_sample = [x[1:-1].cpu() for x in labels_per_sample]
-        predicted_per_sample = [x.argmax(-1)[1:-1].cpu() for x in predicted_per_sample]
-        report["windowdiff"] = metrics.windowdiff(
-            labels_per_sample, predicted_per_sample, window_size=3
+
+        report = self.test_report(
+            labels,
+            predicted,
+            labels_per_sample,
+            predicted_per_sample,
         )
-        print(f"Windowdiff: {report['windowdiff']}")
-        report["winpr"] = metrics.winpr(
-            labels_per_sample, predicted_per_sample, window_size=3
-        )
-        print(f"WinP: {report['winpr']['winP']}, WinR {report['winpr']['winR']}")
+
         return Result(
             training_parameters=self.training_parameters,
             train_dataset_path=self.train_dataset.file_name,
             test_dataset_path=self.test_dataset.file_name,
             model=self.classifier,
             report=report,
+        )
+
+    def test_report(self, labels, predicted, labels_per_sample, predicted_per_sample):
+        report = {}
+        precision, recall, f1, _ = sklearn.metrics.precision_recall_fscore_support(labels, predicted, average="binary")
+        accuracy = sklearn.metrics.accuracy_score(labels, predicted)
+        print(
+            f"Accuracy: {accuracy}",
+            f"Precision: {precision}",
+            f"Recall: {recall}",
+            f"F1-Score: {f1}",
+            sep="\n"
+        )
+        report["accuracy"] = accuracy
+        report["precision"] = precision
+        report["recall"] = recall
+        report["f1"] = f1
+        tn, fp, fn, tp = sklearn.metrics\
+            .confusion_matrix(labels, predicted).ravel()
+
+        report["confusion_matrix"] = {
+            "tn": int(tn),
+            "fp": int(fp),
+            "fn": int(fn),
+            "tp": int(tp),
+        }
+        self._print_confusion_matrix(report["confusion_matrix"])
+
+        if self.token_based:
+            labels_per_sample, predicted_labels_per_sample = self._trimmed_per_label(
+                labels_per_sample,
+                predicted_per_sample,
+            )
+
+            report["windowdiff"] = metrics.windowdiff(
+                labels_per_sample, predicted_labels_per_sample, window_size=3
+            )
+            report["winpr"] = metrics.winpr(
+                labels_per_sample, predicted_labels_per_sample, window_size=3
+            )
+            print(f"Windowdiff: {report['windowdiff']}")
+            print(f"WinP: {report['winpr']['winP']}, WinR {report['winpr']['winR']}")
+            return report
+        else:
+            return report
+
+    def _print_confusion_matrix(self, confusion):
+        print("", "Predicted Spoiler", "Predicted Non-Spoiler", sep="\t")
+        print("Actual Spoiler", confusion["tp"], confusion["fn"], sep="\t")
+        print("Actual Non-Spoiler", confusion["fp"], confusion["tn"], sep="\t")
+
+    def _trimmed_per_label(self, labels_per_sample, predicted_per_sample):
+        return (
+            [x[1:-1].cpu() for x in labels_per_sample],
+            [x.argmax(-1)[1:-1].cpu() for x in predicted_per_sample]
         )
 
     def _write_examples(self, results_file, token_ids, labels, output):
