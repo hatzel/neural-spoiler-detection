@@ -4,11 +4,10 @@ from enum import Enum
 import torch
 import torch.nn.utils.rnn as rnn
 import torch.utils.data
-from functools import lru_cache
 from dataclasses import dataclass
 from tqdm import tqdm
 from typing import List
-from pytorch_pretrained_bert import BertTokenizer
+from transformers import BertTokenizer
 import xml.etree.ElementTree as ElementTree
 
 

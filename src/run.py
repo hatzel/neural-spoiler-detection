@@ -1,12 +1,12 @@
 import torch
 from tqdm import tqdm
 
-from pytorch_pretrained_bert import (
+from transformers import (
     BertTokenizer,
     BertForSequenceClassification,
     BertForTokenClassification,
 )
-from pytorch_pretrained_bert.optimization import BertAdam
+from transformers.optimization import AdamW
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import sklearn
@@ -45,8 +45,8 @@ class BertRun():
             "seed": seed,
             "base_model": self.base_model,
         })
-        self.optimizer = BertAdam(
-            self.classifier.parameters(recurse=True),
+        self.optimizer = AdamW(
+            self.classifier.parameters(),
             lr=lr
         )
         self.classifier, self.optimizer = amp.initialize(self.classifier, self.optimizer, opt_level="O1")
@@ -59,16 +59,13 @@ class BertRun():
             )
             for batch in tqdm(loader):
                 self.optimizer.zero_grad()
-                output = self.classifier(
+                loss, logits = self.classifier(
                     batch.token_ids.cuda(),
-                    batch.sequence_ids.cuda(),
-                    batch.input_mask.cuda(),
-                    labels=batch.labels.cuda() if self.token_based else None,
+                    token_type_ids=batch.sequence_ids.cuda(),
+                    attention_mask=batch.input_mask.cuda(),
+                    labels=batch.labels.cuda(),
                 )
-                if self.token_based:
-                    loss = output.sum()
-                else:
-                    loss = F.cross_entropy(output, batch.labels.cuda())
+                #TODO: masked lm labels should be set to -1 for masked things in token case
                 self.num_batches += 1
                 if writer:
                     writer.add_scalar(
@@ -93,16 +90,16 @@ class BertRun():
             results_file = open(results_file_name, "w")
         for batch in tqdm(loader):
             with torch.no_grad():
-                output = self.classifier(
+                output, = self.classifier(
                     batch.token_ids.cuda(),
-                    batch.sequence_ids.cuda(),
-                    batch.input_mask.cuda()
+                    token_type_ids=batch.sequence_ids.cuda(),
+                    attention_mask=batch.input_mask.cuda()
                 )
                 if self.token_based:
                     # Essentially we merge all examples together here
                     # That means the accuracy is to be understood globally across all tokens
                     labels.extend(batch.labels.reshape(-1))
-                    predicted.extend(output.argmax(2).reshape(-1))
+                    predicted.extend(output.cpu().argmax(2).reshape(-1))
                     spoiler_probability.extend(
                         torch.softmax(output.reshape(-1, 2), 1)[:, 1]
                     )
@@ -200,7 +197,7 @@ class BertRun():
     def _trimmed_per_label(self, labels_per_sample, predicted_per_sample):
         return (
             [x[1:-1].cpu() for x in labels_per_sample],
-            [x.argmax(-1)[1:-1].cpu() for x in predicted_per_sample]
+            [x.cpu().argmax(-1)[1:-1] for x in predicted_per_sample]
         )
 
     def _write_examples(self, results_file, token_ids, labels, output):
