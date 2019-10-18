@@ -144,7 +144,7 @@ class BertRun():
             writer.add_pr_curve(
                 "precision_recall",
                 torch.tensor(labels),
-                torch.tensor(spoiler_probability)
+                torch.tensor(spoiler_probability),
             )
             writer.flush()
         labels, predicted = (
