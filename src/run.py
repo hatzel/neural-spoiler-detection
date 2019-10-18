@@ -1,3 +1,4 @@
+import math
 import torch
 from tqdm import tqdm
 
@@ -5,6 +6,7 @@ from transformers import (
     BertTokenizer,
     BertForSequenceClassification,
     BertForTokenClassification,
+    WarmupLinearSchedule,
 )
 from transformers.optimization import AdamW
 from torch.utils.data import DataLoader
@@ -37,8 +39,11 @@ class BertRun():
         self.base_model = base_model
         self.decision_boundary = 0.5
 
-
-    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
+    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None, half_precision=True):
+        max_grad_norm = 1.0
+        total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * num_epochs
+        peak_lr_after = int(total_num_batches / 2)
+        total_steps = total_num_batches
         if seed is not None:
             util.seed(seed)
         self.training_parameters.append({
@@ -48,11 +53,25 @@ class BertRun():
             "seed": seed,
             "base_model": self.base_model,
         })
-        self.optimizer = AdamW(
+        optimizer = AdamW(
             self.classifier.parameters(),
             lr=lr
         )
-        self.classifier, self.optimizer = amp.initialize(self.classifier, self.optimizer, opt_level="O1")
+        scheduler = WarmupLinearSchedule(
+            optimizer=optimizer,
+            warmup_steps=peak_lr_after,
+            t_total=total_steps,
+        )
+        if half_precision:
+            try:
+                from apex import amp
+            except ImportError:
+                raise ImportError("For half precision you need to have apex installed!")
+            self.classifier, optimizer = amp.initialize(
+                self.classifier,
+                optimizer,
+                opt_level="O1"
+            )
         for epoch in range(num_epochs):
             self.classifier.train()
             loader = DataLoader(
@@ -62,7 +81,7 @@ class BertRun():
                 shuffle=True
             )
             for batch in tqdm(loader):
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss, logits = self.classifier(
                     batch.token_ids.cuda(),
                     token_type_ids=batch.sequence_ids.cuda(),
@@ -76,9 +95,15 @@ class BertRun():
                         loss,
                         self.num_batches
                     )
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
-                self.optimizer.step()
+                if half_precision:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), max_grad_norm)
+                else:
+                    loss.backwards()
+                    torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
+                optimizer.step()
+                scheduler.step()
             del loader
 
     def test(self, writer=None, results_file_name=None):
