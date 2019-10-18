@@ -121,10 +121,7 @@ class BertRun():
                 torch.tensor(labels),
                 torch.tensor(spoiler_probability)
             )
-            # Flush is not present in our pytorch version
-            # TODO: after upgrading pytorch replace with writer.flush()
-            for w in writer.all_writers.values():
-                w.flush()
+            writer.flush()
         labels, predicted = (
             [t.item() for t in labels],
             [t.item() for t in predicted]
