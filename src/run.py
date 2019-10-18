@@ -51,6 +51,7 @@ class BertRun():
         )
         self.classifier, self.optimizer = amp.initialize(self.classifier, self.optimizer, opt_level="O1")
         for epoch in range(num_epochs):
+            self.classifier.train()
             loader = DataLoader(
                 self.train_dataset,
                 batch_size=batch_size,
@@ -89,6 +90,7 @@ class BertRun():
         if results_file_name:
             results_file = open(results_file_name, "w")
         for batch in tqdm(loader):
+            self.classifier.eval()
             with torch.no_grad():
                 output, = self.classifier(
                     batch.token_ids.cuda(),
