@@ -83,7 +83,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
                 ):
                     if n == limit:
                         break
-                    self.saved_data[str(n)] = self.to_feature(line[0]),
+                    self.saved_data[str(n)] = self.to_feature(line[0])
                     self.labels.append(True if line[1] == "True" else False)
             else:
                 for n, line in enumerate(
