@@ -14,7 +14,7 @@ from apex import amp
 
 from result import Result
 from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
-from models import BertForBinarySequenceClassification
+from models import BertForBinarySequenceClassification, BertForBinaryTokenClassification
 import metrics
 import util
 
@@ -25,7 +25,7 @@ class BertRun():
         self.test_dataset = test_dataset
         self.token_based = token_based
         bert_model = (
-            BertForTokenClassification
+            BertForBinaryTokenClassification
             if token_based
             else BertForBinarySequenceClassification
         )
@@ -35,6 +35,7 @@ class BertRun():
         self.training_parameters = []
         self.num_batches = 0
         self.base_model = base_model
+        self.decision_boundary = 0.5
 
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
@@ -66,9 +67,8 @@ class BertRun():
                     batch.token_ids.cuda(),
                     token_type_ids=batch.sequence_ids.cuda(),
                     attention_mask=batch.input_mask.cuda(),
-                    labels=batch.labels.cuda(),
+                    labels=batch.labels.type(torch.float).cuda(),
                 )
-                #TODO: masked lm labels should be set to -1 for masked things in token case
                 self.num_batches += 1
                 if writer:
                     writer.add_scalar(
@@ -103,10 +103,8 @@ class BertRun():
                     # Essentially we merge all examples together here
                     # That means the accuracy is to be understood globally across all tokens
                     labels.extend(batch.labels.reshape(-1))
-                    predicted.extend(output.cpu().argmax(2).reshape(-1))
-                    spoiler_probability.extend(
-                        torch.softmax(output.reshape(-1, 2), 1)[:, 1]
-                    )
+                    predicted.extend(output.reshape(-1) > self.decision_boundary)
+                    spoiler_probability.extend(output.reshape(-1))
                     predicted_per_sample.extend(batch.mask(output))
                     labels_per_sample.extend(batch.mask(batch.labels))
                     if results_file_name:
@@ -178,14 +176,15 @@ class BertRun():
         if self.token_based:
             labels_per_sample, predicted_labels_per_sample = self._trimmed_per_label(
                 labels_per_sample,
-                predicted_per_sample,
+                [(t > self.decision_boundary).squeeze().cpu() for t in predicted_per_sample],
             )
 
+            # For now we need to cast to long here: https://github.com/pytorch/pytorch/issues/27691
             report["windowdiff"] = metrics.windowdiff(
-                labels_per_sample, predicted_labels_per_sample, window_size=3
+                [t.long() for t in labels_per_sample], [t.long() for t in predicted_labels_per_sample], window_size=3
             )
             report["winpr"] = metrics.winpr(
-                labels_per_sample, predicted_labels_per_sample, window_size=3
+                [t.long() for t in labels_per_sample], [t.long() for t in predicted_labels_per_sample], window_size=3
             )
             print(f"Windowdiff: {report['windowdiff']}")
             print(f"WinP: {report['winpr']['winP']}, WinR {report['winpr']['winR']}")
@@ -195,8 +194,8 @@ class BertRun():
 
     def _trimmed_per_label(self, labels_per_sample, predicted_per_sample):
         return (
-            [x[1:-1].cpu() for x in labels_per_sample],
-            [x.cpu().argmax(-1)[1:-1] for x in predicted_per_sample]
+            [x[1:-1] for x in labels_per_sample],
+            [x[1:-1] for x in predicted_per_sample]
         )
 
     def _write_examples(self, results_file, token_ids, labels, output):

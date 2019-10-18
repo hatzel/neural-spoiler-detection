@@ -103,7 +103,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return (
             self.saved_data[str(index)],
-            torch.tensor(self.labels[index], dtype=torch.float)
+            torch.tensor(self.labels[index], dtype=torch.bool)
         )
 
     def to_feature(self, text) -> TvTropesFeature:
@@ -167,7 +167,7 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
         return TokenFeature(
             token_ids=token_ids,
             sentence_ids=sentence_ids,
-            labels=torch.tensor(spoiler_bools, dtype=torch.float),
+            labels=torch.tensor(spoiler_bools, dtype=torch.bool),
         )
 
 
@@ -194,12 +194,11 @@ class PaddedBatch:
             self.labels = torch.stack(transposed[1], 0)
         else:
             size = max(len(el) for el in transposed[1])
-            self.labels = torch.zeros(len(transposed[1]), size, dtype=torch.float)
+            self.labels = torch.zeros(len(transposed[1]), size, dtype=torch.bool)
             for i, el in enumerate(transposed[1]):
                 self.labels[i][:len(el)] = el
 
     def mask(self, tensor):
-        # return [label[:x] for x in
         result = []
         for to_mask, mask in zip(tensor, self.input_mask):
             try:
