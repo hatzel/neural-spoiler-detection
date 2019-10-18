@@ -113,10 +113,8 @@ class BertRun():
                         )
                 else:
                     labels.extend(batch.labels)
-                    predicted.extend(list(output.cpu().argmax(1)))
-                    spoiler_probability.extend(
-                        list(torch.softmax(output, 1))
-                    )
+                    predicted.extend(output > self.decision_boundary)
+                    spoiler_probability.extend(output)
         if writer:
             writer.add_pr_curve(
                 "precision_recall",
