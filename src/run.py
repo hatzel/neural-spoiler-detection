@@ -141,7 +141,7 @@ class BertRun():
 
         return Result(
             training_parameters=self.training_parameters,
-            train_dataset_path=self.train_dataset.file_name,
+            train_dataset_path=self.train_dataset.file_name if self.train_dataset else None,
             test_dataset_path=self.test_dataset.file_name,
             model=self.classifier,
             report=report,
@@ -233,35 +233,39 @@ class BertRun():
             results_file.write("\n\n")
 
     @staticmethod
-    def from_file(model_path, train_path, test_path, base_model, token_based=False, limit=None):
-        run = BertRun.for_dataset(train_path, test_path, base_model, limit=limit, token_based=token_based)
+    def from_file(model_path, train_path, test_path, base_model, **kwargs):
+        run = BertRun.for_dataset(train_path, test_path, base_model, **kwargs)
         data = torch.load(model_path)
         run.classifier.load_state_dict(data)
         return run
 
     @staticmethod
-    def for_dataset(train_path, test_path, base_model, limit=None, token_based=False):
+    def for_dataset(train_path, test_path, base_model,
+                    limit_test=None, train_limit=None, token_based=False):
         tokenizer = BertTokenizer.from_pretrained(base_model)
+        train_dataset = None
         if token_based:
-            train_dataset = TokenSpoilerDataset(
-                train_path,
-                tokenizer,
-                limit=limit,
-            )
+            if train_path:
+                train_dataset = TokenSpoilerDataset(
+                    train_path,
+                    tokenizer,
+                    limit=train_limit,
+                )
             test_dataset = TokenSpoilerDataset(
                 test_path,
                 tokenizer,
-                limit=5000,
+                limit=limit_test,
             )
         else:
-            train_dataset = BinarySpoilerDataset(
-                train_path,
-                tokenizer,
-                limit=limit,
-            )
+            if train_path:
+                train_dataset = BinarySpoilerDataset(
+                    train_path,
+                    tokenizer,
+                    limit=train_limit,
+                )
             test_dataset = BinarySpoilerDataset(
                 test_path,
                 tokenizer,
-                limit=limit,
+                limit=limit_test,
             )
         return BertRun(train_dataset, test_dataset, base_model, token_based=token_based)

@@ -11,7 +11,7 @@ from run import BertRun
 def build_parser():
     parser = argparse.ArgumentParser(description="Spoiler Classificaiton")
     parser.add_argument("--seed", default=42, type=int)
-    parser.add_argument("--train-data", required=True)
+    parser.add_argument("--train-data", required=False, help="Required for training but not for testing.")
     parser.add_argument("--test-data", required=True)
     parser.add_argument(
         "--results-file",
@@ -22,7 +22,8 @@ def build_parser():
     parser.add_argument("--name", help="Give this run a nice name.")
     parser.add_argument("--base-model", help="Which BERT model to perform fine tuning on.", default="bert-base-cased")
     parser.add_argument("--logdir", help="Tensorboard log directory")
-    parser.add_argument("--limit", help="Limit test and train dataset to a specifc number of samples", type=int, default=None)
+    parser.add_argument("--limit-train", help="Limit training dataset to a specifc number of samples", type=int, default=None)
+    parser.add_argument("--limit-test", help="Limit test dataset to a specifc number of samples", type=int, default=None)
     subparsers = parser.add_subparsers(help="Grid search", dest="run_mode")
     grid_search = subparsers.add_parser("grid-search")
     test_mode = subparsers.add_parser("test", help="Test an existing model.")
@@ -37,6 +38,10 @@ def build_parser():
 
 
 def main(args):
+    if args.run_mode != "test" and not args.train_data:
+        raise Exception("When training make sure to supply training data with --train-data!")
+    if args.limit_train or args.limit_test:
+        print("Warning: You supplied a limit, we will only take the first n samples in the file, no full shuffle is performed.")
     print(f"Token based: {args.token_based}")
     writer = SummaryWriter(args.logdir)
     if args.run_mode == "grid-search":
@@ -48,13 +53,26 @@ def main(args):
         random.shuffle(parameter_grid)
         for params in parameter_grid:
             print("Using these parameters: ", params)
-            run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model)
+            run = BertRun.for_dataset(
+                args.train_data,
+                args.test_data,
+                args.base_model,
+                train_limit=args.limit_train,
+                limit_test=args.limit_test,
+            )
             run.train(writer=writer, **params)
             util.seed(1)
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
-        run = BertRun.for_dataset(args.train_data, args.test_data, args.base_model, limit=args.limit, token_based=args.token_based)
+        run = BertRun.for_dataset(
+            args.train_data,
+            args.test_data,
+            args.base_model,
+            limit_test=args.limit_test,
+            train_limit=args.limit_train,
+            token_based=args.token_based,
+        )
         run.train(
             writer=writer,
             batch_size=args.batch_size,
@@ -66,7 +84,14 @@ def main(args):
         result = run.test(writer=writer)
         result.save(args.name)
     elif args.run_mode == "test":
-        run = BertRun.from_file(args.model, args.train_data, args.test_data, args.base_model, limit=args.limit, token_based=args.token_based)
+        run = BertRun.from_file(
+            args.model,
+            None,
+            args.test_data,
+            args.base_model,
+            limit_test=args.limit_test,
+            token_based=args.token_based,
+        )
         util.seed(1)
         run.test(results_file_name=args.results_file)
 
