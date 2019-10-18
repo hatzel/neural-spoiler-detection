@@ -169,7 +169,7 @@ class BertRun():
             "fn": int(fn),
             "tp": int(tp),
         }
-        self._print_confusion_matrix(report["confusion_matrix"])
+        util.print_confusion_matrix(report["confusion_matrix"])
 
         if self.token_based:
             labels_per_sample, predicted_labels_per_sample = self._trimmed_per_label(
@@ -188,11 +188,6 @@ class BertRun():
             return report
         else:
             return report
-
-    def _print_confusion_matrix(self, confusion):
-        print("", "Predicted Spoiler", "Predicted Non-Spoiler", sep="\t")
-        print("Actual Spoiler", confusion["tp"], confusion["fn"], sep="\t")
-        print("Actual Non-Spoiler", confusion["fp"], confusion["tn"], sep="\t")
 
     def _trimmed_per_label(self, labels_per_sample, predicted_per_sample):
         return (
