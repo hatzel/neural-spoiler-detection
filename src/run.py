@@ -14,6 +14,7 @@ from apex import amp
 
 from result import Result
 from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
+from models import BertForBinarySequenceClassification
 import metrics
 import util
 
@@ -26,14 +27,15 @@ class BertRun():
         bert_model = (
             BertForTokenClassification
             if token_based
-            else BertForSequenceClassification
+            else BertForBinarySequenceClassification
         )
         self.classifier = bert_model\
-            .from_pretrained(base_model, num_labels=2).cuda()
+            .from_pretrained(base_model, num_labels=1).cuda()
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
         self.num_batches = 0
         self.base_model = base_model
+
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None):
         if seed is not None:
@@ -115,7 +117,7 @@ class BertRun():
                     labels.extend(batch.labels)
                     predicted.extend(list(output.cpu().argmax(1)))
                     spoiler_probability.extend(
-                        list(torch.softmax(output, 1)[:, 1])
+                        list(torch.softmax(output, 1))
                     )
         if writer:
             writer.add_pr_curve(
