@@ -68,32 +68,32 @@ class TokenFeature:
 
 
 class BinarySpoilerDataset(torch.utils.data.Dataset):
-    def __init__(self, file_name: str, tokenizer: BertTokenizer, limit=None):
-        self.file_name: str = file_name
+    def __init__(self, file_names: str, tokenizer: BertTokenizer, limit=None):
+        self.file_names = file_names
         self.tokenizer = tokenizer
         self.labels: List[bool] = []
         self.clipped_count = 0
-        format = guess_format(file_name)
         self.saved_data = {}
-        with open(file_name, "r") as file:
-            if format == FileType.CSV:
-                reader = csv.reader(file)
-                for n, line in enumerate(
-                    tqdm(reader, desc="Loading json dataset")
-                ):
-                    if n == limit:
-                        break
-                    self.saved_data[str(n)] = self.to_feature(line[0])
-                    self.labels.append(True if line[1] == "True" else False)
-            else:
-                for n, line in enumerate(
-                    tqdm(file, desc="Loading json dataset")
-                ):
-                    if n == limit:
-                        break
-                    data = json.loads(line)
-                    self.saved_data[str(n)] = self.to_feature(data["text"])
-                    self.labels.append(data["spoiler"])
+        n = 0
+        for file_name in file_names:
+            format = guess_format(file_name)
+            with open(file_name, "r") as file:
+                if format == FileType.CSV:
+                    reader = csv.reader(file)
+                    for line in tqdm(reader, desc=f"Loading json dataset {file_name}"):
+                        if n == limit:
+                            break
+                        self.saved_data[str(n)] = self.to_feature(line[0])
+                        self.labels.append(True if line[1] == "True" else False)
+                        n += 1
+                else:
+                    for line in tqdm(file, desc=f"Loading json dataset {file_name}"):
+                        if n == limit:
+                            break
+                        data = json.loads(line)
+                        self.saved_data[str(n)] = self.to_feature(data["text"])
+                        self.labels.append(data["spoiler"])
+                        n += 1
         print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
 
@@ -122,17 +122,18 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
 
 
 class TokenSpoilerDataset(BinarySpoilerDataset):
-    def  __init__(self, file_name: str, tokenizer: BertTokenizer, limit=None):
-        self.file_name: str = file_name
+    def  __init__(self, file_names: str, tokenizer: BertTokenizer, limit=None):
+        self.file_names = file_names
         self.tokenizer = tokenizer
         self.labels: List[torch.Tensor] = []
         self.clipped_count = 0
         self.saved_data = {}
-        if file_name:
+        n = 0
+        for file_name in file_names:
             with open(file_name, "r") as file:
-                for n, line in enumerate(
-                    tqdm(file, desc="Loading json dataset")
-                ):
+                for line in tqdm(file,
+                                 desc=f"Loading json dataset {file_name}"):
+                    n += 1
                     if n == limit:
                         break
                     data = json.loads(line)

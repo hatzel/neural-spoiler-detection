@@ -161,8 +161,8 @@ class BertRun():
 
         return Result(
             training_parameters=self.training_parameters,
-            train_dataset_path=self.train_dataset.file_name if self.train_dataset else None,
-            test_dataset_path=self.test_dataset.file_name,
+            train_dataset_path=" ".join(self.train_dataset.file_names) if self.train_dataset else None,
+            test_dataset_path=" ".join(self.test_dataset.file_names),
             model=self.classifier,
             report=report,
         )
@@ -253,21 +253,21 @@ class BertRun():
             results_file.write("\n\n")
 
     @staticmethod
-    def from_file(model_path, train_path, test_path, base_model, **kwargs):
-        run = BertRun.for_dataset(train_path, test_path, base_model, **kwargs)
+    def from_file(model_path, train_paths, test_path, base_model, **kwargs):
+        run = BertRun.for_dataset(train_paths, test_path, base_model, **kwargs)
         data = torch.load(model_path)
         run.classifier.load_state_dict(data)
         return run
 
     @staticmethod
-    def for_dataset(train_path, test_path, base_model,
+    def for_dataset(train_paths, test_path, base_model,
                     limit_test=None, train_limit=None, token_based=False):
         tokenizer = BertTokenizer.from_pretrained(base_model)
         train_dataset = None
         if token_based:
-            if train_path:
+            if train_paths:
                 train_dataset = TokenSpoilerDataset(
-                    train_path,
+                    train_paths,
                     tokenizer,
                     limit=train_limit,
                 )
@@ -277,9 +277,9 @@ class BertRun():
                 limit=limit_test,
             )
         else:
-            if train_path:
+            if train_paths:
                 train_dataset = BinarySpoilerDataset(
-                    train_path,
+                    train_paths,
                     tokenizer,
                     limit=train_limit,
                 )

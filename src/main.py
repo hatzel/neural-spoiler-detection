@@ -11,8 +11,8 @@ from run import BertRun
 def build_parser():
     parser = argparse.ArgumentParser(description="Spoiler Classificaiton")
     parser.add_argument("--seed", default=42, type=int)
-    parser.add_argument("--train-data", required=False, help="Required for training but not for testing.")
-    parser.add_argument("--test-data", required=True)
+    parser.add_argument("--train-data", required=False, help="Required for training but not for testing.", nargs="*")
+    parser.add_argument("--test-data", required=True, nargs="*")
     parser.add_argument(
         "--results-file",
         help="Store prediction results to a file (only in test mode for now).",
