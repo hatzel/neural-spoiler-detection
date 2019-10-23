@@ -108,3 +108,20 @@ def n_boundaries(input):
         if input[i] != input[i+1]:
             total += 1
     return total
+
+
+def sequence_lengths(dataset):
+    previous = None
+    current_length = 1
+    lengths = []
+    for line in dataset:
+        for current in line:
+            if previous is not None and previous == current:
+                current_length += 1
+            elif previous is not None and previous != current:
+                lengths.append(current_length)
+                current_length = 1
+            previous = current
+        lengths.append(current_length)
+        current_length = 1
+    return lengths
