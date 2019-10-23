@@ -43,7 +43,6 @@ def main(args):
     if args.limit_train or args.limit_test:
         print("Warning: You supplied a limit, we will only take the first n samples in the file, no full shuffle is performed.")
     print(f"Token based: {args.token_based}")
-    writer = SummaryWriter(args.logdir)
     if args.run_mode == "grid-search":
         parameter_grid = list(ParameterGrid({
             "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
@@ -52,6 +51,7 @@ def main(args):
         }))
         random.shuffle(parameter_grid)
         for params in parameter_grid:
+            writer = SummaryWriter(args.logdir)
             print("Using these parameters: ", params)
             run = BertRun.for_dataset(
                 args.train_data,
@@ -65,6 +65,7 @@ def main(args):
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
+        writer = SummaryWriter(args.logdir)
         run = BertRun.for_dataset(
             args.train_data,
             args.test_data,

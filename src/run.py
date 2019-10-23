@@ -31,8 +31,17 @@ class BertRun():
             if token_based
             else BertForBinarySequenceClassification
         )
-        self.classifier = bert_model\
-            .from_pretrained(base_model, num_labels=1).cuda()
+        # Based on tokens in an early dataset
+        # Only applies to the token dataset as it is not balanced
+        spoiler_class_weight = (213569 / 22383)
+        if token_based:
+            self.classifier = bert_model.from_pretrained(
+                base_model,
+                positive_class_weight=spoiler_class_weight,
+                num_labels=1
+            ).cuda()
+        else:
+            self.classifier = bert_model.from_pretrained(base_model, num_labels=1).cuda()
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
         self.num_batches = 0

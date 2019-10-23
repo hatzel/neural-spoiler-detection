@@ -42,7 +42,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel):
 
 
 class BertForBinaryTokenClassification(BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, positive_class_weight):
         super(BertForBinaryTokenClassification, self).__init__(config)
         self.num_labels = config.num_labels
         if self.num_labels != 1:
@@ -72,7 +72,7 @@ class BertForBinaryTokenClassification(BertPreTrainedModel):
 
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss()
+            loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.positive_class_weight)
             # Only keep active parts of the loss
             if attention_mask is not None:
                 active_loss = attention_mask.view(-1) == 1
