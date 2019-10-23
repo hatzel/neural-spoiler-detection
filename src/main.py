@@ -30,7 +30,7 @@ def build_parser():
     test_mode.add_argument("model", help="Model to test against.")
     single_run = subparsers.add_parser("single-run")
     single_run.add_argument("--mode", default="binary", choices=["binary"])
-    single_run.add_argument("--batch-size", default=8, type=int)
+    single_run.add_argument("--batch-size", default=4, type=int)
     single_run.add_argument(
         "--learning-rate", default=(1 * 10 ** -5), type=float)
     single_run.add_argument("--epochs", default=3, type=int)
