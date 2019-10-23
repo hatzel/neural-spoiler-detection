@@ -22,10 +22,14 @@ import util
 
 
 class BertRun():
-    def __init__(self, train_dataset, test_dataset, base_model, token_based=False):
+    def __init__(self, train_dataset, test_dataset, base_model,
+                 token_based=False, test_loss_report=True,
+                 test_loss_early_stopping=False):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
+        self.test_loss_report = test_loss_report
+        self.test_loss_early_stopping = test_loss_early_stopping
         bert_model = (
             BertForBinaryTokenClassification
             if token_based
@@ -48,8 +52,10 @@ class BertRun():
         self.base_model = base_model
         self.decision_boundary = 0.5
 
-    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3, seed=None, half_precision=True):
+    def train(self, writer=None, batch_size=4, lr=1 * 10 ** -5, num_epochs=3,
+              seed=None, half_precision=True):
         max_grad_norm = 1.0
+        previous_test_loss = None
         total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * num_epochs
         peak_lr_after = int(total_num_batches / 2)
         total_steps = total_num_batches
@@ -82,6 +88,7 @@ class BertRun():
                 opt_level="O1"
             )
         for epoch in range(num_epochs):
+            print(f"Starting training epoch {epoch + 1}/{num_epochs}")
             self.classifier.train()
             loader = DataLoader(
                 self.train_dataset,
@@ -113,6 +120,20 @@ class BertRun():
                     torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
                 optimizer.step()
                 scheduler.step()
+            if self.test_loss_report:
+                result = self.test()
+                writer.add_scalar(
+                    "average test loss",
+                    result.average_loss,
+                    self.num_batches,
+                )
+                if previous_test_loss and previous_test_loss < result.average_loss:
+                    # Early stopping when test loss is no longer improving
+                    if self.test_loss_early_stopping:
+                        print("Test loss no longer improving, stopping!")
+                        print(f"(was {previous_test_loss} is {result.average_loss})")
+                        return
+                previous_test_loss = result.average_loss
             del loader
 
     def test(self, writer=None, results_file_name=None):
@@ -123,16 +144,21 @@ class BertRun():
         predicted = []
         predicted_per_sample = []
         spoiler_probability = []
+        total_loss = 0
+        num_losses = 0
         if results_file_name:
             results_file = open(results_file_name, "w")
         for batch in tqdm(loader):
             self.classifier.eval()
             with torch.no_grad():
-                output, = self.classifier(
+                loss, output = self.classifier(
                     batch.token_ids.cuda(),
                     token_type_ids=batch.sequence_ids.cuda(),
-                    attention_mask=batch.input_mask.cuda()
+                    attention_mask=batch.input_mask.cuda(),
+                    labels=batch.labels.type(torch.float).cuda(),
                 )
+                total_loss += loss
+                num_losses += 1
                 if self.token_based:
                     # Essentially we merge all examples together here
                     # That means the accuracy is to be understood globally across all tokens
@@ -174,6 +200,7 @@ class BertRun():
             test_dataset_path=" ".join(self.test_dataset.file_names),
             model=self.classifier,
             report=report,
+            average_loss=total_loss / num_losses,
         )
 
     def test_report(self, labels, predicted, labels_per_sample, predicted_per_sample):
@@ -270,7 +297,7 @@ class BertRun():
 
     @staticmethod
     def for_dataset(train_paths, test_path, base_model,
-                    limit_test=None, train_limit=None, token_based=False):
+                    limit_test=None, train_limit=None, token_based=False, **kwargs):
         tokenizer = BertTokenizer.from_pretrained(base_model)
         train_dataset = None
         if token_based:
@@ -297,4 +324,4 @@ class BertRun():
                 tokenizer,
                 limit=limit_test,
             )
-        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based)
+        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based, **kwargs)

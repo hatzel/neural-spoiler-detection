@@ -13,6 +13,8 @@ def build_parser():
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--train-data", required=False, help="Required for training but not for testing.", nargs="*")
     parser.add_argument("--test-data", required=True, nargs="*")
+    parser.add_argument("--test-loss-report", action="store_true")
+    parser.add_argument("--test-loss-early-stopping", action="store_true")
     parser.add_argument(
         "--results-file",
         help="Store prediction results to a file (only in test mode for now).",
@@ -59,6 +61,8 @@ def main(args):
                 args.base_model,
                 train_limit=args.limit_train,
                 limit_test=args.limit_test,
+                test_loss_early_stopping=args.test_loss_early_stopping,
+                test_loss_report=args.test_loss_report,
             )
             run.train(writer=writer, **params)
             util.seed(1)
@@ -73,6 +77,8 @@ def main(args):
             limit_test=args.limit_test,
             train_limit=args.limit_train,
             token_based=args.token_based,
+            test_loss_early_stopping=args.test_loss_early_stopping,
+            test_loss_report=args.test_loss_report,
         )
         run.train(
             writer=writer,

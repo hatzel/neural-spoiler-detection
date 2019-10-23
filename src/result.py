@@ -17,7 +17,7 @@ def get_version():
 
 
 class Result():
-    def __init__(self, training_parameters, train_dataset_path, test_dataset_path, model, report):
+    def __init__(self, training_parameters, train_dataset_path, test_dataset_path, model, report, average_loss):
         self.training_parameters = training_parameters
         self.train_dataset_path = train_dataset_path
         self.test_dataset_path = test_dataset_path
@@ -25,6 +25,7 @@ class Result():
         self.report = report
         self.version = get_version()
         self.timestamp = datetime.now().isoformat()
+        self.average_loss = average_loss
 
     def save(self, name=None):
         """Save result, including its model an parameters to a file."""
