@@ -136,12 +136,12 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
             with open(file_name, "r") as file:
                 for line in tqdm(file,
                                  desc=f"Loading json dataset {file_name}"):
-                    n += 1
                     if n == limit:
                         break
                     data = json.loads(line)
                     self.saved_data[str(n)] = self.to_feature(data["text"])
                     self.labels.append(self.saved_data[str(n)].labels)
+                    n += 1
             print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
 
