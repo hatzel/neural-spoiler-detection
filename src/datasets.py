@@ -111,7 +111,10 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         tokenized_text = self.tokenizer.tokenize(text)
         if len(tokenized_text) > 498:
             self.clipped_count += 1
-        tokens.extend(tokenized_text[:498])
+        # Apply head + tail truncation as suggested in:
+        # "How to fine tune Bert for text classification?"
+        tokens.extend(tokenized_text[:128])
+        tokens.extend(tokenized_text[-382:])
         tokens.append("[SEP]")
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         sentence_ids = torch.tensor([0 for _ in token_ids])
