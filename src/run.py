@@ -1,4 +1,5 @@
 import math
+import os
 import torch
 from tqdm import tqdm
 
@@ -17,8 +18,11 @@ from apex import amp
 from result import Result
 from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
 from models import BertForBinarySequenceClassification, BertForBinaryTokenClassification
+import early_stopping
 import metrics
 import util
+
+EPOCH_MODEL_PATH = "epoch_models"
 
 
 class BertRun():
@@ -51,14 +55,17 @@ class BertRun():
         self.num_batches = 0
         self.base_model = base_model
         self.decision_boundary = 0.5
+        self.epoch_models = {}
+        self.early_stopped_at = None
 
     def train(self, writer=None, batch_size=4, lr=1 * 10 ** -5, num_epochs=3,
               seed=None, half_precision=True):
         max_grad_norm = 1.0
-        previous_test_loss = None
+        test_losses = []
         total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * num_epochs
         peak_lr_after = int(total_num_batches / 2)
         total_steps = total_num_batches
+        should_stop = early_stopping.ConsecutiveNonImprovment(3)
         if seed is not None:
             util.seed(seed)
         self.training_parameters.append({
@@ -127,13 +134,19 @@ class BertRun():
                     result.average_loss,
                     self.num_batches,
                 )
-                if previous_test_loss and previous_test_loss < result.average_loss:
-                    # Early stopping when test loss is no longer improving
-                    if self.test_loss_early_stopping:
-                        print("Test loss no longer improving, stopping!")
-                        print(f"(was {previous_test_loss} is {result.average_loss})")
-                        return
-                previous_test_loss = result.average_loss
+                self.save_epoch_model(result, epoch)
+                test_losses.append(result.average_loss)
+                # Early stopping when test loss is no longer improving
+                if should_stop(test_losses):
+                    print("Test loss no longer improving, stopping!")
+                    print(f"(losses were {test_losses})")
+                    best_epoch = sorted(
+                        enumerate(test_losses),
+                        key=lambda kv: kv[1]
+                    )[0][0]
+                    self.early_stopped_at = best_epoch
+                    self.load_epoch_model(best_epoch)
+                    return
             del loader
 
     def test(self, writer=None, results_file_name=None):
@@ -201,6 +214,7 @@ class BertRun():
             model=self.classifier,
             report=report,
             average_loss=total_loss / num_losses,
+            early_stopped_at=self.early_stopped_at,
         )
 
     def test_report(self, labels, predicted, labels_per_sample, predicted_per_sample):
@@ -287,6 +301,24 @@ class BertRun():
                 "\t".join(predictions_colored) + "\n"
             )
             results_file.write("\n\n")
+
+    def save_epoch_model(self, result, epoch):
+        model_id = result.save(f"epoch_{epoch}", path=EPOCH_MODEL_PATH)
+        self.epoch_models[epoch] = model_id
+
+    def load_epoch_model(self, epoch):
+        model_id = self.epoch_models[0]
+        data = torch.load(f"{EPOCH_MODEL_PATH}/{model_id}.model")
+        self.classifier.load_state_dict(data)
+
+    def clear_epoch_models(self):
+        for model_id in self.epoch_models.values():
+            os.remove(f"{EPOCH_MODEL_PATH}/{model_id}.model")
+            os.remove(f"{EPOCH_MODEL_PATH}/{model_id}.json")
+
+    def __del__(self):
+        # Epoch models should only be cleaned up
+        self.clear_epoch_models()
 
     @staticmethod
     def from_file(model_path, train_paths, test_path, base_model, **kwargs):
