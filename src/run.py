@@ -28,7 +28,7 @@ EPOCH_MODEL_PATH = "epoch_models"
 class BertRun():
     def __init__(self, train_dataset, test_dataset, base_model,
                  token_based=False, test_loss_report=True,
-                 test_loss_early_stopping=False):
+                 test_loss_early_stopping=False, scheduler_epochs=None):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
@@ -57,14 +57,12 @@ class BertRun():
         self.decision_boundary = 0.5
         self.epoch_models = {}
         self.early_stopped_at = None
+        self.scheduler_epochs = scheduler_epochs
 
     def train(self, writer=None, batch_size=4, lr=1 * 10 ** -5, num_epochs=3,
               seed=None, half_precision=True):
         max_grad_norm = 1.0
         test_losses = []
-        total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * num_epochs
-        peak_lr_after = int(total_num_batches / 2)
-        total_steps = total_num_batches
         should_stop = early_stopping.ConsecutiveNonImprovment(3)
         self.training_parameters.append({
             "batch_size": batch_size,
@@ -77,11 +75,7 @@ class BertRun():
             self.classifier.parameters(),
             lr=lr
         )
-        scheduler = WarmupLinearSchedule(
-            optimizer=optimizer,
-            warmup_steps=peak_lr_after,
-            t_total=total_steps,
-        )
+        scheduler = self.warumup_cooldown_scheduler(optimizer, num_epochs, batch_size)
         if half_precision:
             try:
                 from apex import amp
@@ -217,6 +211,7 @@ class BertRun():
             report=report,
             average_loss=total_loss / num_losses,
             early_stopped_at=self.early_stopped_at,
+            scheduler_epochs=self.scheduler_epochs,
         )
 
     def test_report(self, labels, predicted, labels_per_sample, predicted_per_sample):
@@ -303,6 +298,17 @@ class BertRun():
                 "\t".join(predictions_colored) + "\n"
             )
             results_file.write("\n\n")
+
+    def warumup_cooldown_scheduler(self, optimizer, num_epochs, batch_size):
+        epochs = self.scheduler_epochs or num_epochs
+        total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * epochs
+        peak_lr_after = int(total_num_batches / 2)
+        total_steps = total_num_batches
+        return WarmupLinearSchedule(
+            optimizer=optimizer,
+            warmup_steps=peak_lr_after,
+            t_total=total_steps,
+        )
 
     def save_epoch_model(self, result, epoch):
         model_id = result.save(f"epoch_{epoch}", path=EPOCH_MODEL_PATH)

@@ -80,6 +80,7 @@ def main(args):
             token_based=args.token_based,
             test_loss_early_stopping=args.test_loss_early_stopping,
             test_loss_report=args.test_loss_report,
+            scheduler_epochs=args.scheduler_epochs
         )
         run.train(
             writer=writer,
