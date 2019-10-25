@@ -131,6 +131,16 @@ class BertRun():
                     result.average_loss,
                     self.num_batches,
                 )
+                writer.add_scalar(
+                    "test f1",
+                    result.report["f1"],
+                    self.num_batches,
+                )
+                writer.add_scalar(
+                    "test accuracy",
+                    result.report["accuracy"],
+                    self.num_batches,
+                )
                 self.save_epoch_model(result, epoch)
                 test_losses.append(result.average_loss)
                 # Early stopping when test loss is no longer improving
