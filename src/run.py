@@ -119,7 +119,7 @@ class BertRun():
                         scaled_loss.backward()
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), max_grad_norm)
                 else:
-                    loss.backwards()
+                    loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
                 optimizer.step()
                 scheduler.step()
