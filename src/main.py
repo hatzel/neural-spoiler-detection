@@ -68,7 +68,7 @@ def main(args):
             run.train(writer=writer, **params)
             util.seed_for_testing()
             result = run.test(writer=writer)
-            result.save(args.name)
+            result.save(args.name, writer=writer)
     elif args.run_mode == "single-run":
         writer = SummaryWriter(args.logdir)
         run = BertRun.for_dataset(
@@ -91,7 +91,7 @@ def main(args):
         )
         util.seed_for_testing()
         result = run.test(writer=writer)
-        result.save(args.name)
+        result.save(args.name, writer=writer)
     elif args.run_mode == "test":
         run = BertRun.from_file(
             args.model,

@@ -2,6 +2,7 @@ import torch
 import subprocess
 import json
 from datetime import datetime
+import copy
 
 
 def get_version():
@@ -31,7 +32,7 @@ class Result():
         self.early_stopped_at = early_stopped_at
         self.scheduler_epochs = scheduler_epochs
 
-    def save(self, name=None, path="results"):
+    def save(self, name=None, path="results", writer=None):
         """Save result, including its model an parameters to a file."""
         data = {
             "training_parameters": self.training_parameters,
@@ -49,4 +50,12 @@ class Result():
         json.dump(data, f)
         torch.save(self.model.state_dict(),
                    f"{path}/{base_name}.model")
+        if writer:
+            self.log_to_tensorboard(writer)
         return base_name
+
+    def log_to_tensorboard(self, writer):
+        flat_report = copy.deepcopy(self.report)
+        flat_report.update(flat_report["confusion_matrix"])
+        del flat_report["confusion_matrix"]
+        writer.add_hparams(self.training_parameters[0], flat_report)
