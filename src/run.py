@@ -15,6 +15,7 @@ import torch.nn.functional as F
 import sklearn
 from apex import amp
 
+from stlr import STLR
 from result import Result
 from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
 from models import BertForBinarySequenceClassification, BertForBinaryTokenClassification
@@ -304,9 +305,10 @@ class BertRun():
         total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * epochs
         peak_lr_after = int(total_num_batches / 2)
         total_steps = total_num_batches
-        return WarmupLinearSchedule(
+        return STLR(
             optimizer=optimizer,
-            warmup_steps=peak_lr_after,
+            warmup_fraction=0.1,
+            min_lr_ratio=1/32,
             t_total=total_steps,
         )
 
