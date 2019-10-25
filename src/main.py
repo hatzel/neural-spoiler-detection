@@ -66,7 +66,7 @@ def main(args):
                 test_loss_report=args.test_loss_report,
             )
             run.train(writer=writer, **params)
-            util.seed(1)
+            util.seed_for_testing()
             result = run.test(writer=writer)
             result.save(args.name)
     elif args.run_mode == "single-run":
@@ -88,7 +88,7 @@ def main(args):
             num_epochs=args.epochs,
             seed=args.seed,
         )
-        util.seed(1)
+        util.seed_for_testing()
         result = run.test(writer=writer)
         result.save(args.name)
     elif args.run_mode == "test":
@@ -100,7 +100,7 @@ def main(args):
             limit_test=args.limit_test,
             token_based=args.token_based,
         )
-        util.seed(1)
+        util.seed_for_testing()
         run.test(results_file_name=args.results_file)
 
 

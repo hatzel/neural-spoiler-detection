@@ -66,8 +66,6 @@ class BertRun():
         peak_lr_after = int(total_num_batches / 2)
         total_steps = total_num_batches
         should_stop = early_stopping.ConsecutiveNonImprovment(3)
-        if seed is not None:
-            util.seed(seed)
         self.training_parameters.append({
             "batch_size": batch_size,
             "lr": lr,
@@ -95,6 +93,9 @@ class BertRun():
                 opt_level="O1"
             )
         for epoch in range(num_epochs):
+            # To not depend on if we run tests after each epoch we need to seed here
+            if seed is not None:
+                util.seed(seed + epoch)
             print(f"Starting training epoch {epoch + 1}/{num_epochs}")
             self.classifier.train()
             loader = DataLoader(
@@ -127,6 +128,7 @@ class BertRun():
                     torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
                 optimizer.step()
                 scheduler.step()
+            util.seed_for_testing()
             if self.test_loss_report:
                 result = self.test()
                 writer.add_scalar(
