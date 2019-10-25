@@ -143,7 +143,7 @@ class BertRun():
                     best_epoch = sorted(
                         enumerate(test_losses),
                         key=lambda kv: kv[1]
-                    )[0][0]
+                    )[0][0] + 1
                     self.early_stopped_at = best_epoch
                     self.load_epoch_model(best_epoch)
                     return

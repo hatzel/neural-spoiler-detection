@@ -31,6 +31,7 @@ def build_parser():
     test_mode = subparsers.add_parser("test", help="Test an existing model.")
     test_mode.add_argument("model", help="Model to test against.")
     single_run = subparsers.add_parser("single-run")
+    single_run.add_argument("--scheduler-epochs", type=int, help="How many epochs to base learning rate schedule on.")
     single_run.add_argument("--mode", default="binary", choices=["binary"])
     single_run.add_argument("--batch-size", default=4, type=int)
     single_run.add_argument(
