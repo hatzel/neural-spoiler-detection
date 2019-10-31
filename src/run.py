@@ -60,8 +60,8 @@ class BertRun():
         self.early_stopped_at = None
         self.scheduler_epochs = scheduler_epochs
 
-    def train(self, writer=None, batch_size=4, lr=1 * 10 ** -5, num_epochs=3,
-              seed=None, half_precision=True):
+    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
+              seed=None, half_precision=False):
         max_grad_norm = 1.0
         test_losses = []
         should_stop = early_stopping.ConsecutiveNonImprovment(3)
