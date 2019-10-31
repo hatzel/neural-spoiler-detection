@@ -150,7 +150,7 @@ class BertRun():
                     best_epoch = sorted(
                         enumerate(test_losses),
                         key=lambda kv: kv[1]
-                    )[0][0] + 1
+                    )[0][0]
                     self.early_stopped_at = best_epoch
                     self.load_epoch_model(best_epoch)
                     return
@@ -159,6 +159,7 @@ class BertRun():
     def test(self, writer=None, results_file_name=None):
         loader = DataLoader(self.test_dataset, batch_size=8,
                             collate_fn=PaddedBatch)
+        util.seed_for_testing()
         labels = []
         labels_per_sample = []
         predicted = []
