@@ -48,9 +48,17 @@ def main(args):
     print(f"Token based: {args.token_based}")
     if args.run_mode == "grid-search":
         parameter_grid = list(ParameterGrid({
-            "lr": [1 * 10 ** -5, 5 * 10 ** -5, 3 * 10 ** -5, 2 * 10 ** -5],
-            "seed": [args.seed + n for n in range(3)],
-            "num_epochs": [3, 4, 5],
+            "lr": [1 * 10 ** -6,
+                   5 * 10 ** -7,
+                   5 * 10 ** -7,
+                   5 * 10 ** -6,
+                   1 * 10 ** -5,
+                   2 * 10 ** -5,
+                   3 * 10 ** -5,
+                   5 * 10 ** -5,
+                   10 ** -4],
+            "seed": [args.seed], # Let's not optimize for this, it takes a long time
+            "num_epochs": [4, 12], # We can just use early stopping to explore most of this
         }))
         random.shuffle(parameter_grid)
         for params in parameter_grid:
