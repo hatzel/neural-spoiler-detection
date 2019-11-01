@@ -10,22 +10,25 @@ file_names = sys.argv[1:]
 
 tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
-train_dataset = TokenSpoilerDataset(
-    file_names,
-    tokenizer,
-)
 
-loader = DataLoader(
-    train_dataset,
-    batch_size=32,
-    collate_fn=PaddedBatch,
-    shuffle=True
-)
+print(file_names)
+for name in file_names:
+    train_dataset = TokenSpoilerDataset(
+        [name],
+        tokenizer,
+    )
 
-lengths = []
+    loader = DataLoader(
+        train_dataset,
+        batch_size=32,
+        collate_fn=PaddedBatch,
+        shuffle=True
+    )
 
-for batch in loader:
-    lengths.extend(sequence_lengths(batch.labels))
+    lengths = []
+
+    for batch in loader:
+        lengths.extend(sequence_lengths(batch.full_labels))
 
 df = pandas.DataFrame(lengths, columns=["Sequence Length"])
 print(df.describe())
