@@ -106,6 +106,8 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         return (
             self.saved_data[str(index)],
             torch.tensor(self.labels[index].clone().detach(), dtype=torch.bool)
+            if type(self.labels[index]) != bool else
+            torch.tensor(self.labels[index], dtype=torch.bool)
         )
 
     def to_feature(self, text) -> TvTropesFeature:
