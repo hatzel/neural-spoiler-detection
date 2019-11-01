@@ -13,7 +13,6 @@ from transformers.optimization import AdamW
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import sklearn
-from apex import amp
 
 from stlr import STLR
 from result import Result
