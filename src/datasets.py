@@ -78,9 +78,9 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         self.saved_data = {}
         n = 0
         for file_name in file_names:
-            format = guess_format(file_name)
+            self.format = guess_format(file_name)
             with open(file_name, "r") as file:
-                if format == FileType.CSV:
+                if self.format == FileType.CSV:
                     reader = csv.reader(file)
                     for line in tqdm(reader, desc=f"Loading json dataset {file_name}"):
                         if n == limit:

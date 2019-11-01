@@ -3,9 +3,10 @@ from transformers import BertModel, BertPreTrainedModel
 
 
 class BertForBinarySequenceClassification(BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, positive_class_weight):
         super(BertForBinarySequenceClassification, self).__init__(config)
         self.num_labels = self.config.num_labels
+        self.positive_class_weight = positive_class_weight
         if self.num_labels != 1:
             raise Exception("Binary classification requires one label to apply BCE.")
 
@@ -34,7 +35,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel):
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
 
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss()
+            loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.positive_class_weight)
             loss = loss_fct(logits.view(-1), labels.view(-1))
             outputs = (loss,) + outputs
 

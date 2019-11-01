@@ -16,7 +16,7 @@ import sklearn
 
 from stlr import STLR
 from result import Result
-from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch
+from datasets import BinarySpoilerDataset, TokenSpoilerDataset, PaddedBatch, FileType
 from models import BertForBinarySequenceClassification, BertForBinaryTokenClassification
 import early_stopping
 import metrics
@@ -39,17 +39,23 @@ class BertRun():
             if token_based
             else BertForBinarySequenceClassification
         )
-        # Based on tokens in an early dataset
-        # Only applies to the token dataset as it is not balanced
-        spoiler_class_weight = (213569 / 22383)
         if token_based:
+            # Based on tokens in an early dataset
+            # Only applies to the token dataset as it is not balanced
+            spoiler_class_weight = (213569 / 22383)
             self.classifier = bert_model.from_pretrained(
                 base_model,
                 positive_class_weight=torch.tensor(spoiler_class_weight),
                 num_labels=1
             ).cuda()
         else:
-            self.classifier = bert_model.from_pretrained(base_model, num_labels=1).cuda()
+            # The tv-tropes dataset is not quite balanced
+            if dataset.format == FileType.CSV:
+                spoiler_class_weight = (7800 / 6988)
+            else:
+                spoiler_class_weight = None
+            self.classifier = bert_model.from_pretrained(
+                base_model, num_labels=1, positive_class_weight=spoiler_class_weight).cuda()
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
         self.num_batches = 0
