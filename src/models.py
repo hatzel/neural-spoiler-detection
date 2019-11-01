@@ -44,6 +44,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel):
 class BertForBinaryTokenClassification(BertPreTrainedModel):
     def __init__(self, config, positive_class_weight):
         super(BertForBinaryTokenClassification, self).__init__(config)
+        self.positive_class_weight = positive_class_weight
         self.num_labels = config.num_labels
         if self.num_labels != 1:
             raise Exception("Binary classification requires one label to apply BCE.")

@@ -58,4 +58,7 @@ class Result():
         flat_report = copy.deepcopy(self.report)
         flat_report.update(flat_report["confusion_matrix"])
         del flat_report["confusion_matrix"]
+        flat_report["winP"] = flat_report["winpr"]["winP"]
+        flat_report["winR"] = flat_report["winpr"]["winR"]
+        del flat_report["winpr"]
         writer.add_hparams(self.training_parameters[0], flat_report)

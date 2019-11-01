@@ -60,8 +60,10 @@ class TvTropesFeature:
 @dataclass
 class TokenFeature:
     token_ids: torch.Tensor
+    full_token_ids: torch.Tensor
     sentence_ids: torch.Tensor
     labels: torch.Tensor
+    full_labels: torch.Tensor
 
     def __len__(self):
         return len(self.token_ids)
@@ -103,7 +105,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return (
             self.saved_data[str(index)],
-            torch.tensor(self.labels[index], dtype=torch.bool)
+            torch.tensor(self.labels[index].clone().detach(), dtype=torch.bool)
         )
 
     def to_feature(self, text) -> TvTropesFeature:
@@ -153,25 +155,30 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
             root = ElementTree.fromstring(f"<data>{text}</data>")
         except ElementTree.ParseError:
             print(f"Error parsing comment: {text}")
-        spoiler_bools = []
+        full_spoiler_bools = []
         tokenized_text = []
         for el_text, is_spoiler in iter_text_is_spoiler(root):
             if el_text:
                 tokenized_el = self.tokenizer.tokenize(el_text)
                 for word in tokenized_el:
                     tokenized_text.append(word)
-                    spoiler_bools.append(is_spoiler)
+                    full_spoiler_bools.append(is_spoiler)
         if len(tokenized_text) > 498:
             self.clipped_count += 1
-        spoiler_bools = [False] + spoiler_bools[:498] + [False]
+        spoiler_bools = [False] + full_spoiler_bools[:498] + [False]
         tokens.extend(tokenized_text[:498])
         tokens.append("[SEP]")
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        full_token_ids = self.tokenizer.convert_tokens_to_ids(
+            tokenized_text
+        )
         sentence_ids = torch.tensor([0 for _ in token_ids])
         return TokenFeature(
             token_ids=token_ids,
+            full_token_ids=full_token_ids,
             sentence_ids=sentence_ids,
             labels=torch.tensor(spoiler_bools, dtype=torch.bool),
+            full_labels=torch.tensor(full_spoiler_bools),
         )
 
 
@@ -186,6 +193,8 @@ class PaddedBatch:
             [feature.sentence_ids for feature in transposed[0]],
             batch_first=True,
         )
+        if hasattr(transposed[0][0], "full_labels"):
+            self.full_labels = [feature.full_labels for feature in transposed[0]]
 
         # Initialize input mask with ones
         self.input_mask = torch.ones(
@@ -202,14 +211,16 @@ class PaddedBatch:
             for i, el in enumerate(transposed[1]):
                 self.labels[i][:len(el)] = el
 
-    def mask(self, tensor):
+    def to_full_prediction(self, tensor, fill):
         result = []
-        for to_mask, mask in zip(tensor, self.input_mask):
+        for to_mask, mask, full_labels in zip(tensor, self.input_mask, self.full_labels):
+            goal_len = len(full_labels)
             try:
                 index = (mask == 0).nonzero().reshape(-1)[0]
-                result.append(to_mask[:index])
             except IndexError:
-                result.append(to_mask)
+                index = len(mask)
+            filling = fill.repeat(goal_len - int(index - 2)).reshape(-1, 1).cuda()
+            result.append(torch.cat([to_mask[1:index - 1], filling]))
         return result
 
     def __repr__(self):

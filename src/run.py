@@ -45,7 +45,7 @@ class BertRun():
         if token_based:
             self.classifier = bert_model.from_pretrained(
                 base_model,
-                positive_class_weight=spoiler_class_weight,
+                positive_class_weight=torch.tensor(spoiler_class_weight),
                 num_labels=1
             ).cuda()
         else:
@@ -185,8 +185,10 @@ class BertRun():
                     labels.extend(batch.labels.reshape(-1))
                     predicted.extend(output.reshape(-1) > self.decision_boundary)
                     spoiler_probability.extend(output.reshape(-1))
-                    predicted_per_sample.extend(batch.mask(output))
-                    labels_per_sample.extend(batch.mask(batch.labels))
+                    predicted_per_sample.extend(
+                        t.squeeze() for t in batch.to_full_prediction(output, torch.tensor(0.0))
+                    )
+                    labels_per_sample.extend(batch.full_labels)
                     if results_file_name:
                         self._write_examples(
                             results_file, batch.token_ids, batch.labels, output
@@ -252,10 +254,7 @@ class BertRun():
         util.print_confusion_matrix(report["confusion_matrix"])
 
         if self.token_based:
-            labels_per_sample, predicted_labels_per_sample = self._trimmed_per_label(
-                labels_per_sample,
-                [(t > self.decision_boundary).squeeze().cpu() for t in predicted_per_sample],
-            )
+            predicted_labels_per_sample = [(t > self.decision_boundary).cpu() for t in predicted_per_sample]
 
             # For now we need to cast to long here: https://github.com/pytorch/pytorch/issues/27691
             report["windowdiff"] = metrics.windowdiff(
@@ -269,12 +268,6 @@ class BertRun():
             return report
         else:
             return report
-
-    def _trimmed_per_label(self, labels_per_sample, predicted_per_sample):
-        return (
-            [x[1:-1] for x in labels_per_sample],
-            [x[1:-1] for x in predicted_per_sample]
-        )
 
     def _write_examples(self, results_file, token_ids, labels, output):
         sentences = []
