@@ -51,7 +51,7 @@ class BertRun():
         else:
             # The tv-tropes dataset is not quite balanced
             if train_dataset.format == FileType.CSV:
-                spoiler_class_weight = (7800 / 6988)
+                spoiler_class_weight = (6988 / 7800)
             else:
                 spoiler_class_weight = None
             self.classifier = bert_model.from_pretrained(

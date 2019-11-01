@@ -35,7 +35,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel):
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
 
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.positive_class_weight)
+            loss_fct = nn.BCEWithLogitsLoss(weight=self.positive_class_weight)
             loss = loss_fct(logits.view(-1), labels.view(-1))
             outputs = (loss,) + outputs
 
@@ -74,7 +74,7 @@ class BertForBinaryTokenClassification(BertPreTrainedModel):
 
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss(pos_weight=self.positive_class_weight)
+            loss_fct = nn.BCEWithLogitsLoss(weight=self.positive_class_weight)
             # Only keep active parts of the loss
             if attention_mask is not None:
                 active_loss = attention_mask.view(-1) == 1
