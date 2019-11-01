@@ -328,7 +328,7 @@ class BertRun():
         self.epoch_models[epoch] = model_id
 
     def load_epoch_model(self, epoch):
-        model_id = self.epoch_models[0]
+        model_id = self.epoch_models[epoch]
         data = torch.load(f"{EPOCH_MODEL_PATH}/{model_id}.model")
         self.classifier.load_state_dict(data)
 
