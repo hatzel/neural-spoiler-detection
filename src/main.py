@@ -61,6 +61,8 @@ def main(args):
             "num_epochs": [4, 12], # We can just use early stopping to explore most of this
         }))
         random.shuffle(parameter_grid)
+        model = None
+        optimizer = None
         for params in parameter_grid:
             writer = SummaryWriter(args.logdir)
             print("Using these parameters: ", params)
@@ -72,11 +74,16 @@ def main(args):
                 limit_test=args.limit_test,
                 test_loss_early_stopping=args.test_loss_early_stopping,
                 test_loss_report=args.test_loss_report,
+                model=model,
+                optimizer=optimizer,
             )
             run.train(writer=writer, **params)
             util.seed_for_testing()
             result = run.test(writer=writer)
             result.save(args.name, writer=writer)
+            # We need to preserve the same optimizer instance to avoid initalizing amp multiple times
+            optimizer = run.optimizer
+            model = run.classifier
     elif args.run_mode == "single-run":
         writer = SummaryWriter(args.logdir)
         run = BertRun.for_dataset(

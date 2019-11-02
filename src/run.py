@@ -23,12 +23,14 @@ import metrics
 import util
 
 EPOCH_MODEL_PATH = "epoch_models"
+AMP_INITS = 0
 
 
 class BertRun():
     def __init__(self, train_dataset, test_dataset, base_model,
                  token_based=False, test_loss_report=True,
-                 test_loss_early_stopping=False, scheduler_epochs=None):
+                 test_loss_early_stopping=False, scheduler_epochs=None,
+                 amped_model=None, amped_optimizer=None):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
@@ -56,14 +58,25 @@ class BertRun():
                 spoiler_class_weight = None
             self.classifier = bert_model.from_pretrained(
                 base_model, num_labels=1, positive_class_weight=spoiler_class_weight).cuda()
+        self.base_model = base_model
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
         self.num_batches = 0
-        self.base_model = base_model
         self.decision_boundary = 0.5
         self.epoch_models = {}
         self.early_stopped_at = None
         self.scheduler_epochs = scheduler_epochs
+        self.amped_classifier = amped_model
+        self.amped_optimizer = amped_optimizer
+
+    def init_amped_model(self, classifier, optimizer):
+        """
+        Workaround for not being allowed to call amp.initialize twice.
+        So we need to reuse the old models, using the new state dicts.
+        """
+        self.amped_optimizer.load_state_dict(optimizer.state_dict())
+        self.amped_classifier.load_state_dict(classifier.state_dict())
+        return self.amped_classifier, self.amped_optimizer
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
               seed=None, half_precision=False):
@@ -77,21 +90,32 @@ class BertRun():
             "seed": seed,
             "base_model": self.base_model,
         })
-        optimizer = AdamW(
+        self.optimizer = AdamW(
             self.classifier.parameters(),
             lr=lr
         )
-        scheduler = self.warumup_cooldown_scheduler(optimizer, num_epochs, batch_size)
         if half_precision:
             try:
                 from apex import amp
             except ImportError:
                 raise ImportError("For half precision you need to have apex installed!")
-            self.classifier, optimizer = amp.initialize(
-                self.classifier,
-                optimizer,
-                opt_level="O1"
-            )
+            if self.amped_classifier is None:
+                global AMP_INITS
+                AMP_INITS += 1
+                if AMP_INITS > 1:
+                    raise Exception("Don't initialize amp more than once!")
+                self.classifier, self.optimizer = amp.initialize(
+                    self.classifier,
+                    self.optimizer,
+                    opt_level="O1",
+                )
+
+            else:
+                self.classifier, self.optimizer = self.init_amped_model(
+                    self.classifier, self.optimizer
+                )
+            # Monkey patch optimizer instance
+        scheduler = self.warumup_cooldown_scheduler(self.optimizer, num_epochs, batch_size)
         for epoch in range(num_epochs):
             # To not depend on if we run tests after each epoch we need to seed here
             if seed is not None:
@@ -105,7 +129,7 @@ class BertRun():
                 shuffle=True
             )
             for batch in tqdm(loader):
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 loss, logits = self.classifier(
                     batch.token_ids.cuda(),
                     token_type_ids=batch.sequence_ids.cuda(),
@@ -120,13 +144,13 @@ class BertRun():
                         self.num_batches
                     )
                 if half_precision:
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                         scaled_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), max_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), max_grad_norm)
                 else:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
-                optimizer.step()
+                self.optimizer.step()
                 scheduler.step()
             util.seed_for_testing()
             if self.test_loss_report:
@@ -348,7 +372,7 @@ class BertRun():
 
     @staticmethod
     def for_dataset(train_paths, test_path, base_model,
-                    limit_test=None, train_limit=None, token_based=False, **kwargs):
+                    limit_test=None, train_limit=None, token_based=False, model=None, optimizer=None, **kwargs):
         tokenizer = BertTokenizer.from_pretrained(base_model)
         train_dataset = None
         if token_based:
@@ -375,4 +399,4 @@ class BertRun():
                 tokenizer,
                 limit=limit_test,
             )
-        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based, **kwargs)
+        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based, amped_model=model, amped_optimizer=optimizer, **kwargs)
