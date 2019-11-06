@@ -57,7 +57,7 @@ class BertRun():
             else:
                 spoiler_class_weight = None
             self.classifier = bert_model.from_pretrained(
-                base_model, num_labels=1, positive_class_weight=spoiler_class_weight).cuda()
+                base_model, num_labels=1, positive_class_weight=torch.tensor(spoiler_class_weight)).cuda()
         self.base_model = base_model
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
@@ -135,7 +135,7 @@ class BertRun():
                     batch.token_ids.cuda(),
                     token_type_ids=batch.sequence_ids.cuda(),
                     attention_mask=batch.input_mask.cuda(),
-                    labels=batch.labels.type(torch.float).cuda(),
+                    labels=batch.labels.float().cuda(),
                 )
                 self.num_batches += 1
                 if writer:
