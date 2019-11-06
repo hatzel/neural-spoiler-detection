@@ -30,7 +30,7 @@ class BertRun():
     def __init__(self, train_dataset, test_dataset, base_model,
                  token_based=False, test_loss_report=True,
                  test_loss_early_stopping=False, scheduler_epochs=None,
-                 amped_model=None, amped_optimizer=None):
+                 amped_model=None, amped_optimizer=None, mixed_precision=False):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
@@ -68,6 +68,7 @@ class BertRun():
         self.scheduler_epochs = scheduler_epochs
         self.amped_classifier = amped_model
         self.amped_optimizer = amped_optimizer
+        self.mixed_precision = mixed_precision
 
     def init_amped_model(self, classifier, optimizer):
         """
@@ -79,7 +80,7 @@ class BertRun():
         return self.amped_classifier, self.amped_optimizer
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
-              seed=None, half_precision=False):
+              seed=None):
         max_grad_norm = 1.0
         test_losses = []
         should_stop = early_stopping.ConsecutiveNonImprovment(3)
@@ -94,7 +95,7 @@ class BertRun():
             self.classifier.parameters(),
             lr=lr
         )
-        if half_precision:
+        if self.mixed_precision:
             try:
                 from apex import amp
             except ImportError:
@@ -143,7 +144,7 @@ class BertRun():
                         loss,
                         self.num_batches
                     )
-                if half_precision:
+                if self.mixed_precision:
                     with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                         scaled_loss.backward()
                     torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), max_grad_norm)

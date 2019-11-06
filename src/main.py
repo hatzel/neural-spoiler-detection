@@ -11,6 +11,7 @@ from run import BertRun
 def build_parser():
     parser = argparse.ArgumentParser(description="Spoiler Classificaiton")
     parser.add_argument("--seed", default=42, type=int)
+    parser.add_argument("--mixed-precision", action="store_true")
     parser.add_argument("--train-data", required=False, help="Required for training but not for testing.", nargs="*")
     parser.add_argument("--test-data", required=True, nargs="*")
     parser.add_argument("--test-loss-report", action="store_true")
@@ -76,6 +77,7 @@ def main(args):
                 test_loss_report=args.test_loss_report,
                 model=model,
                 optimizer=optimizer,
+                mixed_precision=args.mixed_precision,
             )
             run.train(writer=writer, **params)
             util.seed_for_testing()
@@ -95,7 +97,8 @@ def main(args):
             token_based=args.token_based,
             test_loss_early_stopping=args.test_loss_early_stopping,
             test_loss_report=args.test_loss_report,
-            scheduler_epochs=args.scheduler_epochs
+            scheduler_epochs=args.scheduler_epochs,
+            mixed_precision=args.mixed_precision,
         )
         run.train(
             writer=writer,
