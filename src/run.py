@@ -30,7 +30,8 @@ class BertRun():
     def __init__(self, train_dataset, test_dataset, base_model,
                  token_based=False, test_loss_report=True,
                  test_loss_early_stopping=False, scheduler_epochs=None,
-                 amped_model=None, amped_optimizer=None, mixed_precision=False):
+                 amped_model=None, amped_optimizer=None, mixed_precision=False,
+                 multi_gpu=False):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
@@ -69,14 +70,21 @@ class BertRun():
         self.amped_classifier = amped_model
         self.amped_optimizer = amped_optimizer
         self.mixed_precision = mixed_precision
+        self.multi_gpu = multi_gpu
 
     def init_amped_model(self, classifier, optimizer):
         """
         Workaround for not being allowed to call amp.initialize twice.
         So we need to reuse the old models, using the new state dicts.
         """
+        if self.multi_gpu:
+            # Fun workaround as nn.DataParallel prefixes everything with an extra "module."
+            self.amped_classifier.load_state_dict(
+                {"module." + k: v for k, v in classifier.state_dict().items()}
+            )
+        else:
+            self.amped_classifier.load_state_dict(classifier.state_dict())
         self.amped_optimizer.load_state_dict(optimizer.state_dict())
-        self.amped_classifier.load_state_dict(classifier.state_dict())
         return self.amped_classifier, self.amped_optimizer
 
     def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
@@ -115,7 +123,8 @@ class BertRun():
                 self.classifier, self.optimizer = self.init_amped_model(
                     self.classifier, self.optimizer
                 )
-            # Monkey patch optimizer instance
+        if self.multi_gpu and type(self.classifier) != torch.nn.DataParallel:
+            self.classifier = torch.nn.DataParallel(self.classifier)
         scheduler = self.warumup_cooldown_scheduler(self.optimizer, num_epochs, batch_size)
         for epoch in range(num_epochs):
             # To not depend on if we run tests after each epoch we need to seed here
