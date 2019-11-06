@@ -56,7 +56,7 @@ class BertRun():
             if train_dataset.format == FileType.CSV:
                 spoiler_class_weight = (6988 / 7800)
             else:
-                spoiler_class_weight = None
+                spoiler_class_weight = 1
             self.classifier = bert_model.from_pretrained(
                 base_model, num_labels=1, positive_class_weight=torch.tensor(spoiler_class_weight)).cuda()
         self.base_model = base_model
