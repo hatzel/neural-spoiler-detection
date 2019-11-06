@@ -10,6 +10,8 @@ from typing import List
 from transformers import BertTokenizer
 import xml.etree.ElementTree as ElementTree
 
+MAX_SIZE_CONTENT_TOKENS = 510
+
 
 class FileType(Enum):
     JSON = 1
@@ -113,7 +115,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
     def to_feature(self, text) -> TvTropesFeature:
         tokens = ["[CLS]"]
         tokenized_text = self.tokenizer.tokenize(text)
-        if len(tokenized_text) > 498:
+        if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
             self.clipped_count += 1
         # Apply head + tail truncation as suggested in:
         # "How to fine tune Bert for text classification?"
@@ -165,10 +167,10 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
                 for word in tokenized_el:
                     tokenized_text.append(word)
                     full_spoiler_bools.append(is_spoiler)
-        if len(tokenized_text) > 498:
+        if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
             self.clipped_count += 1
-        spoiler_bools = [False] + full_spoiler_bools[:498] + [False]
-        tokens.extend(tokenized_text[:498])
+        spoiler_bools = [False] + full_spoiler_bools[:MAX_SIZE_CONTENT_TOKENS] + [False]
+        tokens.extend(tokenized_text[:MAX_SIZE_CONTENT_TOKENS])
         tokens.append("[SEP]")
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         full_token_ids = self.tokenizer.convert_tokens_to_ids(
