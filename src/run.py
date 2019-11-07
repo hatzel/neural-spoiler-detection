@@ -56,7 +56,7 @@ class BertRun():
             if train_dataset.format == FileType.CSV:
                 spoiler_class_weight = (6988 / 7800)
             else:
-                spoiler_class_weight = None
+                spoiler_class_weight = 1
             self.classifier = bert_model.from_pretrained(
                 base_model, num_labels=1, positive_class_weight=torch.tensor(spoiler_class_weight)).cuda()
         self.base_model = base_model
@@ -150,15 +150,15 @@ class BertRun():
                 if writer:
                     writer.add_scalar(
                         "cross entropy loss per batch",
-                        loss,
+                        loss.mean(),
                         self.num_batches
                     )
                 if self.mixed_precision:
                     with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                        scaled_loss.backward()
+                        scaled_loss.mean().backward()
                     torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), max_grad_norm)
                 else:
-                    loss.backward()
+                    loss.mean().backward()
                     torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), max_grad_norm)
                 self.optimizer.step()
                 scheduler.step()
@@ -217,7 +217,7 @@ class BertRun():
                     attention_mask=batch.input_mask.cuda(),
                     labels=batch.labels.type(torch.float).cuda(),
                 )
-                total_loss += loss
+                total_loss += loss.mean()
                 num_losses += 1
                 if self.token_based:
                     # Essentially we merge all examples together here
