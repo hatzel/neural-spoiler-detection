@@ -110,7 +110,7 @@ def n_boundaries(input):
     return total
 
 
-def sequence_lengths(dataset):
+def sequence_lengths(dataset, only_for_classes=[torch.tensor(0), torch.tensor(1)]):
     previous = None
     current_length = 1
     lengths = []
@@ -119,9 +119,11 @@ def sequence_lengths(dataset):
             if previous is not None and previous == current:
                 current_length += 1
             elif previous is not None and previous != current:
-                lengths.append(current_length)
+                if previous in only_for_classes:
+                    lengths.append(current_length)
                 current_length = 1
             previous = current
-        lengths.append(current_length)
+        if previous in only_for_classes:
+            lengths.append(current_length)
         current_length = 1
     return lengths
