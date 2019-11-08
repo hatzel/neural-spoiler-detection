@@ -87,22 +87,7 @@ class BertRun():
         self.amped_optimizer.load_state_dict(optimizer.state_dict())
         return self.amped_classifier, self.amped_optimizer
 
-    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
-              seed=None):
-        max_grad_norm = 1.0
-        test_losses = []
-        should_stop = early_stopping.ConsecutiveNonImprovment(3)
-        self.training_parameters.append({
-            "batch_size": batch_size,
-            "lr": lr,
-            "num_epochs": num_epochs,
-            "seed": seed,
-            "base_model": self.base_model,
-        })
-        self.optimizer = AdamW(
-            self.classifier.parameters(),
-            lr=lr
-        )
+    def mixed_precision_setup(self):
         if self.mixed_precision:
             try:
                 from apex import amp
@@ -123,6 +108,24 @@ class BertRun():
                 self.classifier, self.optimizer = self.init_amped_model(
                     self.classifier, self.optimizer
                 )
+
+    def train(self, writer=None, batch_size=8, lr=1 * 10 ** -5, num_epochs=3,
+              seed=None):
+        max_grad_norm = 1.0
+        test_losses = []
+        should_stop = early_stopping.ConsecutiveNonImprovment(3)
+        self.training_parameters.append({
+            "batch_size": batch_size,
+            "lr": lr,
+            "num_epochs": num_epochs,
+            "seed": seed,
+            "base_model": self.base_model,
+        })
+        self.optimizer = AdamW(
+            self.classifier.parameters(),
+            lr=lr
+        )
+        self.mixed_precision_setup()
         if self.multi_gpu and type(self.classifier) != torch.nn.DataParallel:
             self.classifier = torch.nn.DataParallel(self.classifier)
         scheduler = self.warumup_cooldown_scheduler(self.optimizer, num_epochs, batch_size)
@@ -163,36 +166,18 @@ class BertRun():
                 self.optimizer.step()
                 scheduler.step()
             util.seed_for_testing()
-            if self.test_loss_report:
-                result = self.test()
-                writer.add_scalar(
-                    "average test loss",
-                    result.average_loss,
-                    self.num_batches,
-                )
-                writer.add_scalar(
-                    "test f1",
-                    result.report["f1"],
-                    self.num_batches,
-                )
-                writer.add_scalar(
-                    "test accuracy",
-                    result.report["accuracy"],
-                    self.num_batches,
-                )
-                self.save_epoch_model(result, epoch)
-                test_losses.append(result.average_loss)
-                # Early stopping when test loss is no longer improving
-                if should_stop(test_losses):
-                    print("Test loss no longer improving, stopping!")
-                    print(f"(losses were {test_losses})")
-                    best_epoch = sorted(
-                        enumerate(test_losses),
-                        key=lambda kv: kv[1]
-                    )[0][0]
-                    self.early_stopped_at = best_epoch
-                    self.load_epoch_model(best_epoch)
-                    return
+            test_losses = self.run_test_loss_report(test_losses, epoch, writer)
+            # Early stopping when test loss is no longer improving
+            if should_stop(test_losses):
+                print("Test loss no longer improving, stopping!")
+                print(f"(losses were {test_losses})")
+                best_epoch = sorted(
+                    enumerate(test_losses),
+                    key=lambda kv: kv[1]
+                )[0][0]
+                self.early_stopped_at = best_epoch
+                self.load_epoch_model(best_epoch)
+                return
             del loader
 
     def test(self, writer=None, results_file_name=None):
@@ -266,6 +251,28 @@ class BertRun():
             early_stopped_at=self.early_stopped_at,
             scheduler_epochs=self.scheduler_epochs,
         )
+
+    def run_test_loss_report(self, test_losses, epoch, writer):
+        if self.test_loss_report:
+            result = self.test()
+            writer.add_scalar(
+                "average test loss",
+                result.average_loss,
+                self.num_batches,
+            )
+            writer.add_scalar(
+                "test f1",
+                result.report["f1"],
+                self.num_batches,
+            )
+            writer.add_scalar(
+                "test accuracy",
+                result.report["accuracy"],
+                self.num_batches,
+            )
+            self.save_epoch_model(result, epoch)
+            test_losses.append(result.average_loss)
+        return test_losses
 
     def test_report(self, labels, predicted, labels_per_sample, predicted_per_sample):
         report = {}
