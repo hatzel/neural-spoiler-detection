@@ -295,6 +295,7 @@ class BertRun():
 
         if self.token_based:
             predicted_labels_per_sample = [(t > self.decision_boundary).cpu() for t in predicted_per_sample]
+            predicted_labels_per_sample = [t.unsqueeze(-1) if t.dim() == 0 else t for t in predicted_labels_per_sample]
 
             # For now we need to cast to long here: https://github.com/pytorch/pytorch/issues/27691
             report["windowdiff"] = metrics.windowdiff(
