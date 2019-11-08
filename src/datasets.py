@@ -46,9 +46,7 @@ def guess_format(file_name, limit=10):
     f = open_maybe_gzip(file_name)
     first_n_lines = []
     for _, line in zip(range(limit), f):
-        print(line)
         first_n_lines.append(line)
-    print(first_n_lines)
     if all(
         line.startswith("{") and "}" for line in first_n_lines
     ):
