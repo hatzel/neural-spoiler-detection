@@ -83,6 +83,8 @@ class TokenFeature:
     sentence_ids: torch.Tensor
     labels: torch.Tensor
     full_labels: torch.Tensor
+    conll_ids: torch.Tensor # the id in the CoNLL dataset (just as long as full token_ids)
+    conll_labels: torch.Tensor # the label in the CoNLL dataset
 
     def __len__(self):
         return len(self.token_ids)
@@ -175,14 +177,21 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
         tokens = ["[CLS]"]
         full_spoiler_bools = []
         tokenized_text = []
+        conll_ids = []
+        conll_labels = []
         for whitespace_token in sentence:
             tokenized = self.tokenizer.tokenize(
                 whitespace_token["form"]
             )
+            label = bool(int(whitespace_token["reddit_spoilers:spoiler"]))
+            conll_labels.append(
+                label
+            )
             for token in tokenized:
                 tokenized_text.append(token)
-                full_spoiler_bools.append(
-                    bool(int(whitespace_token["reddit_spoilers:spoiler"]))
+                full_spoiler_bools.append(label)
+                conll_ids.append(
+                    int(whitespace_token["id"])
                 )
         if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
             self.clipped_count += 1
@@ -200,6 +209,8 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
             sentence_ids=sentence_ids,
             labels=torch.tensor(spoiler_bools, dtype=torch.bool),
             full_labels=torch.tensor(full_spoiler_bools),
+            conll_ids=torch.tensor(conll_ids),
+            conll_labels=torch.tensor(conll_labels),
         )
 
 
@@ -216,6 +227,10 @@ class PaddedBatch:
         )
         if hasattr(transposed[0][0], "full_labels"):
             self.full_labels = [feature.full_labels for feature in transposed[0]]
+
+        if hasattr(transposed[0][0], "conll_labels"):
+            self.conll_labels = [feature.conll_labels for feature in transposed[0]]
+            self.conll_ids = [feature.conll_ids for feature in transposed[0]]
 
         # Initialize input mask with ones
         self.input_mask = torch.ones(
@@ -242,7 +257,28 @@ class PaddedBatch:
                 index = len(mask)
             filling = fill.repeat(goal_len - int(index - 2)).reshape(-1, 1).cuda()
             result.append(torch.cat([to_mask[1:index - 1], filling]))
+
         return result
+
+    def to_full_prediction_merged(self, tensor, fill):
+        """
+        Convert to prediction with matching conll indexes merged.
+        """
+        result = self.to_full_prediction(tensor, fill)
+        merged_result = []
+        for sentence, ids in zip(result, self.conll_ids):
+            try:
+                max_id = ids[-1]
+            except IndexError:
+                merged_result.append(torch.tensor([]))
+                continue
+            pooling = torch.zeros(max_id).float()
+            counts = torch.zeros(max_id).float()
+            for score, id in zip(sentence, ids):
+                counts[id - 1] += 1
+                pooling[id - 1] += score.squeeze()
+            merged_result.append(torch.div(pooling, counts))
+        return merged_result
 
     def __repr__(self):
         return f"<PaddedBatch labels={self.labels}>"

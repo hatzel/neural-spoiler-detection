@@ -205,15 +205,9 @@ class BertRun():
                 total_loss += loss.mean()
                 num_losses += 1
                 if self.token_based:
-                    # Essentially we merge all examples together here
-                    # That means the accuracy is to be understood globally across all tokens
-                    labels.extend(batch.labels.reshape(-1))
-                    predicted.extend(output.reshape(-1) > self.decision_boundary)
-                    spoiler_probability.extend(output.reshape(-1))
-                    predicted_per_sample.extend(
-                        t.squeeze() for t in batch.to_full_prediction(output, torch.tensor(0.0))
+                        t.squeeze() if len(t) > 1 else t for t in batch.to_full_prediction_merged(output, torch.tensor(0.0))
                     )
-                    labels_per_sample.extend(batch.full_labels)
+                    labels_per_sample.extend(batch.conll_labels)
                     if results_file_name:
                         self._write_examples(
                             results_file, batch.token_ids, batch.labels, output
@@ -222,6 +216,12 @@ class BertRun():
                     labels.extend(batch.labels)
                     predicted.extend(output > self.decision_boundary)
                     spoiler_probability.extend(output)
+        if self.token_based:
+            # Essentially we merge all examples together here
+            # That means the accuracy is to be understood globally across all tokens
+            labels = torch.cat(labels_per_sample, -1)
+            predicted = torch.cat(predicted_per_sample, -1) > self.decision_boundary
+            spoiler_probability = torch.cat(predicted_per_sample, -1)
         if writer:
             writer.add_pr_curve(
                 "precision_recall",
@@ -302,7 +302,6 @@ class BertRun():
 
         if self.token_based:
             predicted_labels_per_sample = [(t > self.decision_boundary).cpu() for t in predicted_per_sample]
-            predicted_labels_per_sample = [t.unsqueeze(-1) if t.dim() == 0 else t for t in predicted_labels_per_sample]
 
             # For now we need to cast to long here: https://github.com/pytorch/pytorch/issues/27691
             report["windowdiff"] = metrics.windowdiff(
