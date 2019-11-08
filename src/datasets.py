@@ -1,5 +1,7 @@
 import csv
 import json
+import conllu
+import gzip
 from enum import Enum
 import torch
 import torch.nn.utils.rnn as rnn
@@ -16,6 +18,7 @@ MAX_SIZE_CONTENT_TOKENS = 510
 class FileType(Enum):
     JSON = 1
     CSV = 2
+    CONLLU = 3
 
 
 class Task:
@@ -29,13 +32,29 @@ class Task:
         pass
 
 
+def open_maybe_gzip(file_name):
+    try:
+        f = gzip.open(file_name, "rt")
+        f.readlines(10)
+        f = gzip.open(file_name, "rt")
+    except OSError:
+        f = open(file_name, "r")
+    return f
+
+
 def guess_format(file_name, limit=10):
-    f = open(file_name, "r")
+    f = open_maybe_gzip(file_name)
+    first_n_lines = []
+    for _, line in zip(range(limit), f):
+        print(line)
+        first_n_lines.append(line)
+    print(first_n_lines)
     if all(
-        line.startswith("{") and "}" in line
-        for _, line in zip(range(limit), f)
+        line.startswith("{") and "}" for line in first_n_lines
     ):
         return FileType.JSON
+    elif first_n_lines[0].startswith("# global.columns"):
+        return FileType.CONLLU
     else:
         return FileType.CSV
 
@@ -81,16 +100,16 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         n = 0
         for file_name in file_names:
             self.format = guess_format(file_name)
-            with open(file_name, "r") as file:
+            with open_maybe_gzip(file_name) as file:
                 if self.format == FileType.CSV:
                     reader = csv.reader(file)
-                    for line in tqdm(reader, desc=f"Loading json dataset {file_name}"):
+                    for line in tqdm(reader, desc=f"Loading csv dataset {file_name}"):
                         if n == limit:
                             break
                         self.saved_data[str(n)] = self.to_feature(line[0])
                         self.labels.append(True if line[1] == "True" else False)
                         n += 1
-                else:
+                elif self.format == FileType.JSON:
                     for line in tqdm(file, desc=f"Loading json dataset {file_name}"):
                         if n == limit:
                             break
@@ -139,34 +158,34 @@ class TokenSpoilerDataset(BinarySpoilerDataset):
         self.saved_data = {}
         n = 0
         for file_name in file_names:
-            with open(file_name, "r") as file:
-                for line in tqdm(file,
-                                 desc=f"Loading json dataset {file_name}"):
+            format = guess_format(file_name)
+            with open_maybe_gzip(file_name) as file:
+                parser = conllu.parse_incr(file)
+                if format != FileType.CONLLU:
+                    raise Exception(f"Unsupported filetype {format}")
+                for sentence in tqdm(parser,
+                                 desc=f"Loading conllu dataset {file_name}"):
                     if n == limit:
                         break
-                    data = json.loads(line)
-                    self.saved_data[str(n)] = self.to_feature(data["text"])
+                    self.saved_data[str(n)] = self.to_feature(sentence)
                     self.labels.append(self.saved_data[str(n)].labels)
                     n += 1
             print(f"Clipped {self.clipped_count} posts.")
         super(BinarySpoilerDataset, self).__init__()
 
-    def to_feature(self, text) -> TokenFeature:
+    def to_feature(self, sentence) -> TokenFeature:
         tokens = ["[CLS]"]
-        # Normalize xml parser chokes on this
-        text = text.replace('\x10', '')
-        try:
-            root = ElementTree.fromstring(f"<data>{text}</data>")
-        except ElementTree.ParseError:
-            print(f"Error parsing comment: {text}")
         full_spoiler_bools = []
         tokenized_text = []
-        for el_text, is_spoiler in iter_text_is_spoiler(root):
-            if el_text:
-                tokenized_el = self.tokenizer.tokenize(el_text)
-                for word in tokenized_el:
-                    tokenized_text.append(word)
-                    full_spoiler_bools.append(is_spoiler)
+        for whitespace_token in sentence:
+            tokenized = self.tokenizer.tokenize(
+                whitespace_token["form"]
+            )
+            for token in tokenized:
+                tokenized_text.append(token)
+                full_spoiler_bools.append(
+                    bool(int(whitespace_token["reddit_spoilers:spoiler"]))
+                )
         if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
             self.clipped_count += 1
         spoiler_bools = [False] + full_spoiler_bools[:MAX_SIZE_CONTENT_TOKENS] + [False]
