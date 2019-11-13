@@ -205,6 +205,7 @@ class BertRun():
                 total_loss += loss.mean()
                 num_losses += 1
                 if self.token_based:
+                    predicted_per_sample.extend(
                         t.squeeze() if len(t) > 1 else t for t in batch.to_full_prediction_merged(output, torch.tensor(0.0))
                     )
                     labels_per_sample.extend(batch.conll_labels)
