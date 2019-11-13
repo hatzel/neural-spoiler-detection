@@ -305,14 +305,19 @@ class BertRun():
             predicted_labels_per_sample = [(t > self.decision_boundary).cpu() for t in predicted_per_sample]
 
             # For now we need to cast to long here: https://github.com/pytorch/pytorch/issues/27691
-            report["windowdiff"] = metrics.windowdiff(
-                [t.long() for t in labels_per_sample], [t.long() for t in predicted_labels_per_sample], window_size=3
-            )
-            report["winpr"] = metrics.winpr(
-                [t.long() for t in labels_per_sample], [t.long() for t in predicted_labels_per_sample], window_size=3
-            )
-            print(f"Windowdiff: {report['windowdiff']}")
-            print(f"WinP: {report['winpr']['winP']}, WinR {report['winpr']['winR']}")
+            for k in [41, 16, 5]:
+                report[f"windowdiff_{k}"] = metrics.windowdiff(
+                    [t.long() for t in labels_per_sample],
+                    [t.long() for t in predicted_labels_per_sample],
+                    window_size=k,
+                )
+                report[f"winpr_{k}"] = metrics.winpr(
+                    [t.long() for t in labels_per_sample],
+                    [t.long() for t in predicted_labels_per_sample],
+                    window_size=k,
+                )
+                print(f"Windowdiff_{k}:", report[f"windowdiff_{k}"])
+                print(f"WinP_{k}:", report[f'winpr_{k}']['winP'], f"WinR_{k}", report[f'winpr_{k}']['winR'])
             return report
         else:
             return report

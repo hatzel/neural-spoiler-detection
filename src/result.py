@@ -58,8 +58,15 @@ class Result():
         flat_report = copy.deepcopy(self.report)
         flat_report.update(flat_report["confusion_matrix"])
         del flat_report["confusion_matrix"]
-        if "winpr" in flat_report.keys():
-            flat_report["winP"] = flat_report["winpr"]["winP"]
-            flat_report["winR"] = flat_report["winpr"]["winR"]
-            del flat_report["winpr"]
+        to_delete = []
+        to_append = {}
+        for name in flat_report.keys():
+            if name.startswith("winpr_"):
+                k = name.split("_")[-1]
+                to_append["winP_" + k] = flat_report[name]["winP"]
+                to_append["winR_" + k] = flat_report[name]["winR"]
+                to_delete.append(name)
+        for name in to_delete:
+            del flat_report[name]
+        flat_report.update(to_append)
         writer.add_hparams(self.training_parameters[0], flat_report)
