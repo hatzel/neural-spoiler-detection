@@ -103,11 +103,19 @@ def windowdiff(reference_labels, computed_labels, window_size=3, average="micro"
 
 
 def n_boundaries(input):
-    total = 0
-    for i in range(len(input) - 1):
-        if input[i] != input[i+1]:
-            total += 1
-    return total
+    if type(input) == torch.Tensor:
+        # First group is not a border every other one is
+        # shouldn't be < 0 for empty sequences
+        return max(
+            len(input.unique_consecutive()) - 1,
+            0,
+        )
+    else:
+        total = 0
+        for i in range(len(input) - 1):
+            if input[i] != input[i+1]:
+                total += 1
+        return total
 
 
 def sequence_lengths(dataset, only_for_classes=[torch.tensor(0), torch.tensor(1)]):
