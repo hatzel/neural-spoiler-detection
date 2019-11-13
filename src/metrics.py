@@ -46,7 +46,7 @@ def winpr(reference_labels, computed_labels, window_size=3, average="micro"):
             tp += min(reference_boundaries, computed_boundaries)
             # The paper can be a bit confusing for this one
             # The window size is not equal to k but instead k = window_size + 1
-            tn += len(reference_window) - 1 - max(reference_boundaries, computed_boundaries)
+            tn += max(0, len(reference_window) - 1 - max(reference_boundaries, computed_boundaries))
             fp += max(0, computed_boundaries - reference_boundaries)
             fn += max(0, reference_boundaries - computed_boundaries)
             i += 1

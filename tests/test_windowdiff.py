@@ -1,5 +1,6 @@
 from src.metrics import windowdiff
 import sys
+import pytest
 try:
     from nltk.metrics import windowdiff as nltk_windowdiff
 except ImportError:
@@ -78,3 +79,10 @@ def test_windowdiff_extra_boundaries():
     if 'nltk' in sys.modules:
         result = nltk_windowdiff(to_boundaries(reference_labels[0]), to_boundaries(computed_labels[0]), 2)
         assert result == 0.4
+
+
+def test_windowdiff_empty():
+    reference_labels = [[]]
+    computed_labels = [[]]
+    with pytest.raises(ZeroDivisionError):
+        result = windowdiff(reference_labels, computed_labels, window_size=3)

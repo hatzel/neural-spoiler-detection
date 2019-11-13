@@ -65,6 +65,18 @@ def test_winpr_extra_boundaries():
     assert result["winR"] == 1
 
 
+def test_winpr_empty():
+    reference_labels = [[]]
+    computed_labels = [[]]
+    result = winpr(reference_labels, computed_labels, window_size=3)
+    assert result["true_positives"] == 0
+    assert result["true_negatives"] == 0
+    assert result["false_positives"] == 0
+    assert result["false_negatives"] == 0
+    assert math.isnan(result["winP"])
+    assert math.isnan(result["winR"])
+
+
 def test_winpr_tensors():
     reference_labels = torch.tensor([[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]])
     computed_labels = torch.tensor([[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]])
