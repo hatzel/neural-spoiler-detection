@@ -102,12 +102,17 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
             self.format = guess_format(file_name)
             with open_maybe_gzip(file_name) as file:
                 if self.format == FileType.CSV:
-                    reader = csv.reader(file)
+                    reader = csv.DictReader(file)
                     for line in tqdm(reader, desc=f"Loading csv dataset {file_name}"):
                         if n == limit:
                             break
-                        self.saved_data[str(n)] = self.to_feature(line[0])
-                        self.labels.append(True if line[1] == "True" else False)
+                        self.saved_data[str(n)] = self.to_feature(
+                            line["sentence"],
+                            second_sequence=line.get("story_text"),
+                        )
+                        self.labels.append(
+                            True if line["spoiler"] == "True" else False
+                        )
                         n += 1
                 elif self.format == FileType.JSON:
                     for line in tqdm(file, desc=f"Loading json dataset {file_name}"):
@@ -131,21 +136,35 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
             torch.tensor(self.labels[index], dtype=torch.bool)
         )
 
-    def to_feature(self, text) -> TvTropesFeature:
-        tokens = ["[CLS]"]
-        tokenized_text = self.tokenizer.tokenize(text)
-        if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
-            self.clipped_count += 1
-        # Apply head + tail truncation as suggested in:
-        # "How to fine tune Bert for text classification?"
-        tokens.extend(tokenized_text[:128])
-        tokens.extend(tokenized_text[-382:])
-        tokens.append("[SEP]")
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        sentence_ids = torch.tensor([0 for _ in token_ids])
+    def to_feature(self, text, second_sequence=None) -> TvTropesFeature:
+        end_first_token_sample = 128
+        start_second_token_sample = MAX_SIZE_CONTENT_TOKENS - end_first_token_sample
+        if second_sequence is not None:
+            end_first_token_sample = int(end_first_token_sample / 2)
+            start_second_token_sample = int(start_second_token_sample / 2)
+        token_ids = []
+        sentence_ids = []
+        sentences = [text, second_sequence] \
+            if second_sequence is not None \
+            else [text]
+        for i, sentence in enumerate(sentences):
+            tokenized_text = self.tokenizer.tokenize(sentence)
+            if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
+                self.clipped_count += 1
+            new_tokens = []
+            # Apply head + tail truncation as suggested in:
+            # "How to fine tune Bert for text classification?"
+            if i == 0:
+                new_tokens.append("[CLS]")
+            new_tokens.extend(tokenized_text[:end_first_token_sample])
+            new_tokens.extend(tokenized_text[-start_second_token_sample:])
+            new_tokens.append("[SEP]")
+            new_token_ids = self.tokenizer.convert_tokens_to_ids(new_tokens)
+            token_ids += new_token_ids
+            sentence_ids.append(torch.tensor([i for _ in new_token_ids]))
         return TvTropesFeature(
             token_ids=token_ids,
-            sentence_ids=sentence_ids,
+            sentence_ids=torch.cat(sentence_ids, -1),
         )
 
 
