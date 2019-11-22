@@ -53,7 +53,7 @@ class BertRun():
             ).cuda()
         else:
             # The tv-tropes dataset is not quite balanced
-            if train_dataset.format == FileType.CSV:
+            if (test_dataset.format or train_dataset.format) == FileType.CSV:
                 spoiler_class_weight = (6988 / 7800)
             else:
                 spoiler_class_weight = 1
