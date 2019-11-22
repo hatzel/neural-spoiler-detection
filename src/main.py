@@ -13,8 +13,8 @@ def build_parser():
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--mixed-precision", action="store_true")
     parser.add_argument("--multi-gpu", action="store_true")
-    parser.add_argument("--train-data", required=False, help="Required for training but not for testing.", nargs="*")
-    parser.add_argument("--test-data", required=True, nargs="*")
+    parser.add_argument("--train-data", required=False, help="Required for training but not for testing.", action="append")
+    parser.add_argument("--test-data", required=True, action="append")
     parser.add_argument("--test-loss-report", action="store_true")
     parser.add_argument("--test-loss-early-stopping", action="store_true")
     parser.add_argument(
