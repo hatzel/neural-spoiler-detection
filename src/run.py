@@ -77,13 +77,7 @@ class BertRun():
         Workaround for not being allowed to call amp.initialize twice.
         So we need to reuse the old models, using the new state dicts.
         """
-        if self.multi_gpu:
-            # Fun workaround as nn.DataParallel prefixes everything with an extra "module."
-            self.amped_classifier.load_state_dict(
-                {"module." + k: v for k, v in classifier.state_dict().items()}
-            )
-        else:
-            self.amped_classifier.load_state_dict(classifier.state_dict())
+        self.amped_classifier.load_parallel_state_dict(classifier.state_dict())
         self.amped_optimizer.load_state_dict(optimizer.state_dict())
         return self.amped_classifier, self.amped_optimizer
 
@@ -377,7 +371,7 @@ class BertRun():
     def load_epoch_model(self, epoch):
         model_id = self.epoch_models[epoch]
         data = torch.load(f"{EPOCH_MODEL_PATH}/{model_id}.model")
-        self.classifier.load_state_dict(data)
+        self.classifier.load_parallel_state_dict(data)
 
     def clear_epoch_models(self):
         for model_id in self.epoch_models.values():
@@ -392,7 +386,7 @@ class BertRun():
     def from_file(model_path, train_paths, test_path, base_model, **kwargs):
         run = BertRun.for_dataset(train_paths, test_path, base_model, **kwargs)
         data = torch.load(model_path)
-        run.classifier.load_state_dict(data)
+        run.classifier.load_parallel_state_dict(data)
         return run
 
     @staticmethod

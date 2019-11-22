@@ -2,7 +2,24 @@ import torch.nn as nn
 from transformers import BertModel, BertPreTrainedModel
 
 
-class BertForBinarySequenceClassification(BertPreTrainedModel):
+class LoadParallellMixin(nn.Module):
+    def load_parallel_state_dict(self, to_load, remove_prefix="module."):
+        """
+        Supports loading parallel and non parallel state dicts into non parallel models.
+
+        We need this due to apex needing to be initialized on the non parallelized model.
+        """
+        if not any(k.startswith(remove_prefix) for k in self.state_dict().keys()):
+            self.load_state_dict(
+                {
+                    k[len(remove_prefix):]: v for k, v in to_load.items()
+                    if k.startswith(remove_prefix) }
+            )
+        else:
+            self.load_state_dict(to_load)
+
+
+class BertForBinarySequenceClassification(BertPreTrainedModel, LoadParallellMixin):
     def __init__(self, config, positive_class_weight):
         super(BertForBinarySequenceClassification, self).__init__(config)
         self.num_labels = self.config.num_labels
@@ -42,7 +59,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel):
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
 
-class BertForBinaryTokenClassification(BertPreTrainedModel):
+class BertForBinaryTokenClassification(BertPreTrainedModel, LoadParallellMixin):
     def __init__(self, config, positive_class_weight):
         super(BertForBinaryTokenClassification, self).__init__(config)
         self.positive_class_weight = positive_class_weight
