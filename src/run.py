@@ -208,7 +208,9 @@ class BertRun():
                     predicted_per_sample.extend(
                         t.squeeze() if len(t) > 1 else t for t in batch.to_full_prediction_merged(output, torch.tensor(0.0))
                     )
-                    labels_per_sample.extend(batch.conll_labels)
+                    labels_per_sample.extend(
+                        t.bool() for t in batch.conll_labels
+                    )
                     if results_file_name:
                         self._write_examples(
                             results_file, batch.token_ids, batch.labels, output
