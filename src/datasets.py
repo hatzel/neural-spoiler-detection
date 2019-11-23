@@ -139,9 +139,11 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
     def to_feature(self, text, second_sequence=None) -> TvTropesFeature:
         end_first_token_sample = 128
         start_second_token_sample = MAX_SIZE_CONTENT_TOKENS - end_first_token_sample
+        max_tokens = MAX_SIZE_CONTENT_TOKENS
         if second_sequence is not None:
             end_first_token_sample = int(end_first_token_sample / 2)
             start_second_token_sample = int(start_second_token_sample / 2)
+            max_tokens /= 2
         token_ids = []
         sentence_ids = []
         sentences = [text, second_sequence] \
@@ -149,15 +151,18 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
             else [text]
         for i, sentence in enumerate(sentences):
             tokenized_text = self.tokenizer.tokenize(sentence)
-            if len(tokenized_text) > MAX_SIZE_CONTENT_TOKENS:
+            if i == 1 and len(tokenized_text) > max_tokens:
                 self.clipped_count += 1
             new_tokens = []
             # Apply head + tail truncation as suggested in:
             # "How to fine tune Bert for text classification?"
             if i == 0:
                 new_tokens.append("[CLS]")
-            new_tokens.extend(tokenized_text[:end_first_token_sample])
-            new_tokens.extend(tokenized_text[-start_second_token_sample:])
+            if max_tokens <= len(tokenized_text):
+                new_tokens.extend(tokenized_text[:end_first_token_sample])
+                new_tokens.extend(tokenized_text[-start_second_token_sample:])
+            else:
+                new_tokens.extend(tokenized_text)
             new_tokens.append("[SEP]")
             new_token_ids = self.tokenizer.convert_tokens_to_ids(new_tokens)
             token_ids += new_token_ids
