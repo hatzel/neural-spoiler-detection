@@ -20,8 +20,8 @@ class LoadParallellMixin(nn.Module):
 
 
 class BertForBinarySequenceClassification(BertPreTrainedModel, LoadParallellMixin):
-    def __init__(self, config, positive_class_weight):
-        super(BertForBinarySequenceClassification, self).__init__(config)
+    def __init__(self, config, positive_class_weight, **kwargs):
+        super(BertForBinarySequenceClassification, self).__init__(config, **kwargs)
         self.num_labels = self.config.num_labels
         self.positive_class_weight = positive_class_weight
         if self.num_labels != 1:

@@ -39,11 +39,13 @@ def build_parser():
     single_run.add_argument(
         "--learning-rate", default=(1 * 10 ** -5), type=float)
     single_run.add_argument("--epochs", default=3, type=int)
+    attention_mode = subparsers.add_parser("attention-analysis", help="Analyze attention on an existing model")
+    attention_mode.add_argument("model", help="Model to test against.")
     return parser
 
 
 def main(args):
-    if args.run_mode != "test" and not args.train_data:
+    if args.run_mode != "test" and args.run_mode != "attention-analysis" and not args.train_data:
         raise Exception("When training make sure to supply training data with --train-data!")
     if args.limit_train or args.limit_test:
         print("Warning: You supplied a limit, we will only take the first n samples in the file, no full shuffle is performed.")
@@ -122,8 +124,19 @@ def main(args):
             limit_test=args.limit_test,
             token_based=args.token_based,
         )
-        util.seed_for_testing()
         run.test(results_file_name=args.results_file)
+    elif args.run_mode == "attention-analysis":
+        if args.token_based:
+            raise Exception("Attention analysis is only supported for document classification")
+        run = BertRun.from_file(
+            args.model,
+            None,
+            args.test_data,
+            args.base_model,
+            limit_test=args.limit_test,
+            output_attentions=True,
+        )
+        run.collect_attention()
 
 
 if __name__ == "__main__":

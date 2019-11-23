@@ -31,7 +31,7 @@ class BertRun():
                  token_based=False, test_loss_report=True,
                  test_loss_early_stopping=False, scheduler_epochs=None,
                  amped_model=None, amped_optimizer=None, mixed_precision=False,
-                 multi_gpu=False):
+                 multi_gpu=False, output_attentions=False):
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.token_based = token_based
@@ -58,7 +58,10 @@ class BertRun():
             else:
                 spoiler_class_weight = 1
             self.classifier = bert_model.from_pretrained(
-                base_model, num_labels=1, positive_class_weight=torch.tensor(spoiler_class_weight)).cuda()
+                base_model, num_labels=1,
+                positive_class_weight=torch.tensor(spoiler_class_weight),
+                output_attentions=output_attentions,
+            ).cuda()
         self.base_model = base_model
         self.tokenizer = BertTokenizer.from_pretrained(base_model)
         self.training_parameters = []
@@ -352,6 +355,35 @@ class BertRun():
             )
             results_file.write("\n\n")
 
+    def collect_attention(self):
+        loader = DataLoader(self.test_dataset, batch_size=8,
+                            collate_fn=PaddedBatch)
+        assert self.classifier.config.output_attentions
+        for batch in tqdm(loader):
+            self.classifier.eval()
+            with torch.no_grad():
+                loss, output, attentions = self.classifier(
+                    batch.token_ids.cuda(),
+                    token_type_ids=batch.sequence_ids.cuda(),
+                    attention_mask=batch.input_mask.cuda(),
+                    labels=batch.labels.type(torch.float).cuda(),
+                )
+                # Extract attention caused by [CLS] token in last layer
+                # We take the mean attention of all 12 heads in the last layer
+                cls_attention = attentions[-1][:, :, 0].mean(1)
+                for i in range(batch.token_ids.size()[0]):
+                    tokens = self.tokenizer.convert_ids_to_tokens(token.item() for token in batch.token_ids[i])
+                    tokens = [token for token in tokens if token != "[PAD]"]
+                    attention = cls_attention[i][1:len(tokens) - 1]
+                    attention = attention / attention.max(0).values
+                    token_attention = list(zip(
+                        tokens[1:-1],
+                        attention,
+                    ))
+                    util.print_colored(token_attention)
+                    print("Latex:")
+                    print(util.latex_colored(token_attention))
+
     def warumup_cooldown_scheduler(self, optimizer, num_epochs, batch_size):
         epochs = self.scheduler_epochs or num_epochs
         total_num_batches = math.ceil(len(self.train_dataset) / batch_size) * epochs
@@ -391,7 +423,9 @@ class BertRun():
 
     @staticmethod
     def for_dataset(train_paths, test_path, base_model,
-                    limit_test=None, train_limit=None, token_based=False, model=None, optimizer=None, **kwargs):
+                    limit_test=None, train_limit=None, token_based=False,
+                    model=None, optimizer=None, output_attentions=False,
+                    **kwargs):
         tokenizer = BertTokenizer.from_pretrained(base_model)
         train_dataset = None
         if token_based:
@@ -418,4 +452,8 @@ class BertRun():
                 tokenizer,
                 limit=limit_test,
             )
-        return BertRun(train_dataset, test_dataset, base_model, token_based=token_based, amped_model=model, amped_optimizer=optimizer, **kwargs)
+        return BertRun(train_dataset, test_dataset, base_model,
+                       token_based=token_based, amped_model=model,
+                       amped_optimizer=optimizer,
+                       output_attentions=output_attentions,
+                       **kwargs)
