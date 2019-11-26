@@ -1,8 +1,9 @@
 import math
 import os
+import sys
+
 import torch
 from tqdm import tqdm
-
 from transformers import (
     BertTokenizer,
     BertForSequenceClassification,
@@ -13,6 +14,8 @@ from transformers.optimization import AdamW
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import sklearn
+import nltk
+import scipy
 
 from stlr import STLR
 from result import Result
@@ -63,7 +66,9 @@ class BertRun():
                 output_attentions=output_attentions,
             ).cuda()
         self.base_model = base_model
-        self.tokenizer = BertTokenizer.from_pretrained(base_model)
+        self.tokenizer = (self.test_dataset.tokenizer or
+                          self.train_dataset.tokenizer or
+                          BertTokenizer.from_pretrained(base_model))
         self.training_parameters = []
         self.num_batches = 0
         self.decision_boundary = 0.5
@@ -355,10 +360,18 @@ class BertRun():
             )
             results_file.write("\n\n")
 
-    def collect_attention(self):
+    def collect_attention(self, results_file_name=None):
+        if results_file_name:
+            out = open(results_file_name, "w")
+        else:
+            out = sys.stdout
         loader = DataLoader(self.test_dataset, batch_size=8,
                             collate_fn=PaddedBatch)
         assert self.classifier.config.output_attentions
+        is_proper_noun = []
+        is_noun = []
+        is_past_tense = []
+        all_attentions = []
         for batch in tqdm(loader):
             self.classifier.eval()
             with torch.no_grad():
@@ -375,14 +388,45 @@ class BertRun():
                     tokens = self.tokenizer.convert_ids_to_tokens(token.item() for token in batch.token_ids[i])
                     tokens = [token for token in tokens if token != "[PAD]"]
                     attention = cls_attention[i][1:len(tokens) - 1]
-                    attention = attention / attention.max(0).values
+                    attention = attention / (attention.max(0).values
+                                             if len(attention) > 0
+                                             else torch.tensor(1))
+                    all_attentions.extend(attention)
                     token_attention = list(zip(
                         tokens[1:-1],
                         attention,
                     ))
-                    util.print_colored(token_attention)
-                    print("Latex:")
-                    print(util.latex_colored(token_attention))
+                    merged_tokens, merged_token_counts = util.merge_compound_tokens(tokens[1:-1])
+                    tagged = nltk.pos_tag(merged_tokens)
+                    for (token, token_type), count in zip(tagged, merged_token_counts):
+                        is_proper_noun.extend([token_type == "NNP" or token_type == "NNPS"] * count)
+                        is_noun.extend([token_type.startswith("N")] * count)
+                        is_past_tense.extend([token_type == "VBD" or token_type == "VBN"] * count)
+                    print(
+                        util.spoiler_header(
+                            batch.labels[i].cpu().item(),
+                            output[i].cpu(),
+                            boundary=self.decision_boundary
+                        ),
+                        file=out
+                    )
+                    util.print_colored(token_attention, out=out)
+                    print("Latex:", file=out)
+                    print(util.latex_colored(token_attention), file=out)
+        print(
+            "Correlation proper nouns",
+            scipy.stats.pointbiserialr(
+                is_proper_noun, torch.tensor(all_attentions).numpy()
+            )
+        )
+        print("Correlation nouns",
+              scipy.stats.pointbiserialr(
+                  is_noun, torch.tensor(all_attentions).numpy())
+              )
+        print("Correlation past tense",
+              scipy.stats.pointbiserialr(
+                  is_past_tense, torch.tensor(all_attentions).numpy())
+              )
 
     def warumup_cooldown_scheduler(self, optimizer, num_epochs, batch_size):
         epochs = self.scheduler_epochs or num_epochs
@@ -417,8 +461,9 @@ class BertRun():
     @staticmethod
     def from_file(model_path, train_paths, test_path, base_model, **kwargs):
         run = BertRun.for_dataset(train_paths, test_path, base_model, **kwargs)
-        data = torch.load(model_path)
-        run.classifier.load_parallel_state_dict(data)
+        if model_path:
+            data = torch.load(model_path)
+            run.classifier.load_parallel_state_dict(data)
         return run
 
     @staticmethod

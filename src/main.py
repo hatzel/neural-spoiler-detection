@@ -40,7 +40,7 @@ def build_parser():
         "--learning-rate", default=(1 * 10 ** -5), type=float)
     single_run.add_argument("--epochs", default=3, type=int)
     attention_mode = subparsers.add_parser("attention-analysis", help="Analyze attention on an existing model")
-    attention_mode.add_argument("model", help="Model to test against.")
+    attention_mode.add_argument("model", help="Model to test against.", nargs="?")
     return parser
 
 
@@ -136,7 +136,7 @@ def main(args):
             limit_test=args.limit_test,
             output_attentions=True,
         )
-        run.collect_attention()
+        run.collect_attention(results_file_name=args.results_file)
 
 
 if __name__ == "__main__":
