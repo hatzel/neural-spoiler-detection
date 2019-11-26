@@ -286,13 +286,14 @@ class PaddedBatch:
 
     def to_full_prediction_merged(self, tensor, fill):
         """
-        Convert to prediction with matching conll indexes merged.
+        Convert to prediction, combining entries that belong to multiple conll ids
         """
         result = self.to_full_prediction(tensor, fill)
         merged_result = []
-        for sentence, ids in zip(result, self.conll_ids):
+        for sentence, ids, labels \
+                in zip(result, self.conll_ids, self.conll_labels):
             try:
-                max_id = ids[-1]
+                max_id = len(labels)
             except IndexError:
                 merged_result.append(torch.tensor([]))
                 continue
@@ -301,7 +302,9 @@ class PaddedBatch:
             for score, id in zip(sentence, ids):
                 counts[id - 1] += 1
                 pooling[id - 1] += score.squeeze()
-            merged_result.append(torch.div(pooling, counts))
+            avg_pooled = torch.div(pooling, counts)
+            avg_pooled[torch.isnan(avg_pooled)] = 0
+            merged_result.append(avg_pooled)
         return merged_result
 
     def __repr__(self):
