@@ -307,5 +307,28 @@ class PaddedBatch:
             merged_result.append(avg_pooled)
         return merged_result
 
+
+    def merged_tokens(self, i, tokenizer):
+        """
+        Return list of strings with tokens combined according to the conll_ids.
+        """
+        out = []
+        counts = []
+        last_id = None
+        tokens = tokenizer.convert_ids_to_tokens(self.token_ids[i].tolist())
+        for token, current_id in zip(tokens[1:-1], self.conll_ids[i]):
+            if last_id == current_id.item():
+                if token.startswith("##"):
+                    out[-1] += (token[2:])
+                else:
+                    out[-1] += token
+                counts[-1] += 1
+            else:
+                out.append(token)
+                counts.append(1)
+            last_id = current_id
+        return out, counts
+
+
     def __repr__(self):
         return f"<PaddedBatch labels={self.labels}>"

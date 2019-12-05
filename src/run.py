@@ -52,7 +52,8 @@ class BertRun():
             self.classifier = bert_model.from_pretrained(
                 base_model,
                 positive_class_weight=torch.tensor(spoiler_class_weight),
-                num_labels=1
+                num_labels=1,
+                output_attentions=output_attentions,
             ).cuda()
         else:
             # The tv-tropes dataset is not quite balanced
@@ -383,7 +384,10 @@ class BertRun():
                 )
                 # Extract attention caused by [CLS] token in last layer
                 # We take the mean attention of all 12 heads in the last layer
-                cls_attention = attentions[-1][:, :, 0].mean(1)
+                # Its the correct dimension, if we set it to zero inside the
+                # attention layer no valid predictions are produced.
+                cls_attention = attentions[-1][:, 0, :].mean(1)
+                predictions = batch.to_full_prediction_merged(output, torch.tensor(0.0))
                 for i in range(batch.token_ids.size()[0]):
                     tokens = self.tokenizer.convert_ids_to_tokens(token.item() for token in batch.token_ids[i])
                     tokens = [token for token in tokens if token != "[PAD]"]
@@ -391,42 +395,60 @@ class BertRun():
                     attention = attention / (attention.max(0).values
                                              if len(attention) > 0
                                              else torch.tensor(1))
-                    all_attentions.extend(attention)
-                    token_attention = list(zip(
-                        tokens[1:-1],
-                        attention,
-                    ))
-                    merged_tokens, merged_token_counts = util.merge_compound_tokens(tokens[1:-1])
+                    if self.token_based:
+                        merged_tokens, merged_token_counts = batch.merged_tokens(i, self.tokenizer)
+                        token_attention = list(zip(
+                            merged_tokens,
+                            attention,
+                        ))
+                    else:
+                        all_attentions.extend(attention)
+                        # In this case we don't have the data and need to heurisitiaclly build back the sentence
+                        token_attention = list(zip(
+                            tokens[1:-1],
+                            attention,
+                        ))
+                        merged_tokens, merged_token_counts = util.merge_compound_tokens(tokens[1:-1])
                     tagged = nltk.pos_tag(merged_tokens)
                     for (token, token_type), count in zip(tagged, merged_token_counts):
                         is_proper_noun.extend([token_type == "NNP" or token_type == "NNPS"] * count)
-                        is_noun.extend([token_type.startswith("N")] * count)
+                        is_noun.extend(
+                            [token_type.startswith("N") and (token_type not in ["NNP", "NNPS"])]
+                            * count
+                        )
                         is_past_tense.extend([token_type == "VBD" or token_type == "VBN"] * count)
-                    print(
-                        util.spoiler_header(
-                            batch.labels[i].cpu().item(),
-                            output[i].cpu(),
-                            boundary=self.decision_boundary
-                        ),
-                        file=out
-                    )
-                    util.print_colored(token_attention, out=out)
-                    print("Latex:", file=out)
-                    print(util.latex_colored(token_attention), file=out)
-        print(
-            "Correlation proper nouns",
-            scipy.stats.pointbiserialr(
-                is_proper_noun, torch.tensor(all_attentions).numpy()
+                    if not self.token_based:
+                        print(
+                            util.spoiler_header(
+                                batch.labels[i].cpu().item(),
+                                output[i].cpu(),
+                                boundary=self.decision_boundary
+                            ),
+                            file=out
+                        )
+                        util.print_colored(token_attention, out=out)
+                        print("Latex:", file=out)
+                        print(util.latex_colored(token_attention), file=out)
+                    else:
+                        predicted_labels = predictions[i] > self.decision_boundary
+                        score = (predicted_labels == batch.conll_labels[i]).sum().item()
+                        util.spoiler_token_header(score, len(batch.conll_labels[i]), out=out)
+                        util.print_colored(token_attention, batch.conll_labels[i], predictions[i], out=out)
+        if not self.token_based:
+            print(
+                "Correlation proper nouns",
+                scipy.stats.pointbiserialr(
+                    is_proper_noun, torch.tensor(all_attentions).numpy()
+                )
             )
-        )
-        print("Correlation nouns",
-              scipy.stats.pointbiserialr(
-                  is_noun, torch.tensor(all_attentions).numpy())
-              )
-        print("Correlation past tense",
-              scipy.stats.pointbiserialr(
-                  is_past_tense, torch.tensor(all_attentions).numpy())
-              )
+            print("Correlation nouns",
+                  scipy.stats.pointbiserialr(
+                      is_noun, torch.tensor(all_attentions).numpy())
+                  )
+            print("Correlation past tense",
+                  scipy.stats.pointbiserialr(
+                      is_past_tense, torch.tensor(all_attentions).numpy())
+                  )
 
     def warumup_cooldown_scheduler(self, optimizer, num_epochs, batch_size):
         epochs = self.scheduler_epochs or num_epochs

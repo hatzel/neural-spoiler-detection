@@ -29,7 +29,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel, LoadParallellMixi
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.output_layer = nn.Linear(config.hidden_size, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         self.init_weights()
 
@@ -47,7 +47,7 @@ class BertForBinarySequenceClassification(BertPreTrainedModel, LoadParallellMixi
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
-        logits = self.output_layer(pooled_output)
+        logits = self.classifier(pooled_output)
 
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
 
@@ -60,8 +60,8 @@ class BertForBinarySequenceClassification(BertPreTrainedModel, LoadParallellMixi
 
 
 class BertForBinaryTokenClassification(BertPreTrainedModel, LoadParallellMixin):
-    def __init__(self, config, positive_class_weight):
-        super(BertForBinaryTokenClassification, self).__init__(config)
+    def __init__(self, config, positive_class_weight, **kwargs):
+        super(BertForBinaryTokenClassification, self).__init__(config, **kwargs)
         self.positive_class_weight = positive_class_weight
         self.num_labels = config.num_labels
         if self.num_labels != 1:

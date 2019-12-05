@@ -20,7 +20,7 @@ def build_parser():
     parser.add_argument(
         "--results-file",
         help="Store prediction results to a file (only in test mode for now).",
-        default="results.log"
+        default=None
     )
     parser.add_argument("--token-based", action="store_true")
     parser.add_argument("--name", help="Give this run a nice name.")
@@ -126,8 +126,6 @@ def main(args):
         )
         run.test(results_file_name=args.results_file)
     elif args.run_mode == "attention-analysis":
-        if args.token_based:
-            raise Exception("Attention analysis is only supported for document classification")
         run = BertRun.from_file(
             args.model,
             None,
@@ -135,6 +133,7 @@ def main(args):
             args.base_model,
             limit_test=args.limit_test,
             output_attentions=True,
+            token_based=args.token_based,
         )
         run.collect_attention(results_file_name=args.results_file)
 
