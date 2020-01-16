@@ -10,12 +10,16 @@ class LoadParallellMixin(nn.Module):
         We need this due to apex needing to be initialized on the non parallelized model.
         """
         if not any(k.startswith(remove_prefix) for k in self.state_dict().keys()):
-            self.load_state_dict(
-                {
-                    k[len(remove_prefix):]: v for k, v in to_load.items()
-                    if k.startswith(remove_prefix) }
-            )
-        else:
+            to_load = {
+                k[len(remove_prefix):]: v for k, v in to_load.items()
+                if k.startswith(remove_prefix)
+            }
+        try:
+            self.load_state_dict(to_load)
+        except RuntimeError:
+            for layer in ["weight", "bias"]:
+                to_load[f"classifier.{layer}"] = to_load[f"output_layer.{layer}"]
+                del to_load[f"output_layer.{layer}"]
             self.load_state_dict(to_load)
 
 

@@ -42,14 +42,14 @@ def print_colored(token_attention, spoiler_labels=(), predictions=[],
             if not token.startswith("##"):
                 _set_background_color(0, 0, 0, out=out)
                 out.write(" ")
-            if prediction > 0.5:
+            if prediction and prediction > 0.5:
                 out.write("\x1b[4:3m")
-            elif prediction < 0.5 or prediction is None:
+            elif prediction and prediction < 0.5 or prediction is None:
                 out.write("\x1b[59m")
                 out.write("\x1b[4:1m")
-            scaled_prediction = ((prediction - 0.5) * 0.2 + 0.5)
-            pred_color = 255 * max(0, min(1, scaled_prediction))
-            out.write(f"\x1b[58;2;{int(pred_color)};0;0m")
+            if prediction:
+                pred_color = 255 * clamp(scaled_prediction(prediction))
+                out.write(f"\x1b[58;2;{int(pred_color)};0;0m")
             if label and not bold_state:
                 out.write("\x1b[1m")
                 bold_state = True
@@ -78,21 +78,52 @@ def _reset_foreground_color(out=sys.stdout):
     out.write("\x1b[0m\n")
 
 
-def latex_colored(token_attention, spoiler_labels=(), predictions=[],
+def scaled_prediction(prediction):
+    return ((prediction / 8) + 0.5)
+
+
+def scale_tensors_to_max(in_tensor):
+    return in_tensor / (in_tensor.max(0).values
+         if len(in_tensor) > 0
+         else torch.tensor(1)
+     )
+
+
+def clamp(value, lower=0, upper=1):
+    return max(lower, min(upper, value))
+
+
+def latex_colored(token_attention, spoiler_labels=(), predictions=torch.tensor([]),
                   out=sys.stdout):
     out = ""
     if len(token_attention) != len(spoiler_labels):
         spoiler_labels = spoiler_labels[:len(token_attention)]
         predictions = predictions[:len(token_attention)]
-    for (token, attention), label, prediction\
-            in zip_longest(token_attention, spoiler_labels, predictions):
+    predicted_spoiler = (t > 0.5 for t in predictions)
+    predictions = scale_tensors_to_max(predictions)
+    for (token, attention), label, prediction, predicted_spoiler\
+            in zip_longest(token_attention, spoiler_labels,
+                           predictions, predicted_spoiler):
         if token.startswith("##"):
             token = token[2:]
         else:
             out += " "
+        if label is not None and label:
+            out += "\\textbf{"
+        if prediction:
+            prediction_color = int(100 * clamp(scaled_prediction(prediction)))
+            thickness = "{2}" if predicted_spoiler else "{1}"
+            if prediction_color != 0:
+                out += f"\\cul[red!{prediction_color}]" + thickness + "{"
+        token = token.replace("&gt;", "\\textgreater")
+        token = token.replace("&lt;", "\\textless")
         out += ("\\colorbox{blue!"
                 + str(int(attention * 0.5 * 100))
                 + "}{\strut " + token + "}")
+        if prediction and prediction_color != 0:
+            out += "}"
+        if label is not None and label:
+            out += "}"
     return out
 
 

@@ -372,7 +372,34 @@ class BertRun():
         is_proper_noun = []
         is_noun = []
         is_past_tense = []
+        is_in_word_list = []
+        # words_of_interest = [
+        #     "show",
+        #     "finale",
+        #     "killed",
+        #     "death"
+        #     "turns",
+        #     "season",
+        #     "end",
+        #     "kills",
+        #     "dead",
+        #     "revealed",
+        # ]
+        words_of_interest = [
+            "end",
+            "ending",
+            "spoiler",
+            "also"
+            "way",
+            "story",
+            "like",
+            "spoilers",
+            "made",
+            "get",
+        ]
         all_attentions = []
+        total_min = 0
+        total_max = 0
         for batch in tqdm(loader):
             self.classifier.eval()
             with torch.no_grad():
@@ -382,12 +409,15 @@ class BertRun():
                     attention_mask=batch.input_mask.cuda(),
                     labels=batch.labels.type(torch.float).cuda(),
                 )
-                # Extract attention caused by [CLS] token in last layer
-                # We take the mean attention of all 12 heads in the last layer
-                # Its the correct dimension, if we set it to zero inside the
-                # attention layer no valid predictions are produced.
-                cls_attention = attentions[-1][:, 0, :].mean(1)
-                predictions = batch.to_full_prediction_merged(output, torch.tensor(0.0))
+                if self.token_based:
+                    cls_attention = attentions[-1][:, :, :].mean((1,2))
+                    predictions = batch.to_full_prediction_merged(output, torch.tensor(0.0))
+                else:
+                    # Extract attention caused by [CLS] token in last layer
+                    # We take the mean attention of all 12 heads in the last layer
+                    # Its the correct dimension, if we set it to zero inside the
+                    # attention layer no valid predictions are produced.
+                    cls_attention = attentions[-1][:, 0, :].mean(1)
                 for i in range(batch.token_ids.size()[0]):
                     tokens = self.tokenizer.convert_ids_to_tokens(token.item() for token in batch.token_ids[i])
                     tokens = [token for token in tokens if token != "[PAD]"]
@@ -403,7 +433,8 @@ class BertRun():
                         ))
                     else:
                         all_attentions.extend(attention)
-                        # In this case we don't have the data and need to heurisitiaclly build back the sentence
+                        # In this case we don't have the data, and need to
+                        # heurisitiaclly build back the sentence
                         token_attention = list(zip(
                             tokens[1:-1],
                             attention,
@@ -416,6 +447,7 @@ class BertRun():
                             [token_type.startswith("N") and (token_type not in ["NNP", "NNPS"])]
                             * count
                         )
+                        is_in_word_list.extend([token in words_of_interest] * count)
                         is_past_tense.extend([token_type == "VBD" or token_type == "VBN"] * count)
                     if not self.token_based:
                         print(
@@ -430,10 +462,22 @@ class BertRun():
                         print("Latex:", file=out)
                         print(util.latex_colored(token_attention), file=out)
                     else:
+                        # total_min = min([t.min(0).values for t in predictions] + [total_min])
+                        # total_max = max([t.max(0).values for t in predictions] + [total_max])
+                        # print(f"Min prediction: {total_min}, max prediction {total_max}")
                         predicted_labels = predictions[i] > self.decision_boundary
                         score = (predicted_labels == batch.conll_labels[i]).sum().item()
                         util.spoiler_token_header(score, len(batch.conll_labels[i]), out=out)
                         util.print_colored(token_attention, batch.conll_labels[i], predictions[i], out=out)
+                        print("Latex:", file=out)
+                        print(
+                            util.latex_colored(
+                                token_attention,
+                                spoiler_labels=batch.conll_labels[i],
+                                predictions=predictions[i]
+                            ),
+                            file=out
+                        )
         if not self.token_based:
             print(
                 "Correlation proper nouns",
@@ -448,6 +492,10 @@ class BertRun():
             print("Correlation past tense",
                   scipy.stats.pointbiserialr(
                       is_past_tense, torch.tensor(all_attentions).numpy())
+                  )
+            print("Correlation in word list",
+                  scipy.stats.pointbiserialr(
+                      is_in_word_list, torch.tensor(all_attentions).numpy())
                   )
 
     def warumup_cooldown_scheduler(self, optimizer, num_epochs, batch_size):
