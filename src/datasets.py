@@ -108,7 +108,7 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
                             break
                         self.saved_data[str(n)] = self.to_feature(
                             line["sentence"],
-                            second_sequence=line.get("story_text"),
+                            second_sequence=line.get("story_text")[1:-1],
                         )
                         self.labels.append(
                             True if line["spoiler"] == "True" else False
@@ -137,6 +137,8 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         )
 
     def to_feature(self, text, second_sequence=None) -> TvTropesFeature:
+        if second_sequence:
+            self.to_feature_trim_second(text, second_sequence=second_sequence)
         end_first_token_sample = 128
         start_second_token_sample = MAX_SIZE_CONTENT_TOKENS - end_first_token_sample
         max_tokens = MAX_SIZE_CONTENT_TOKENS
@@ -170,6 +172,23 @@ class BinarySpoilerDataset(torch.utils.data.Dataset):
         return TvTropesFeature(
             token_ids=token_ids,
             sentence_ids=torch.cat(sentence_ids, -1),
+        )
+
+    def to_feature_trim_second(self, text, second_sequence=None) -> TvTropesFeature:
+        # sentences = [text, second_sequence]
+        tokens = ["[CLS]"]
+        tokenized_text = self.tokenizer.tokenize(text)
+        tokens.extend(tokenized_text)
+        tokens.append("[SEP]")
+        first_len = len(tokens)
+        to_go = MAX_SIZE_CONTENT_TOKENS - first_len
+        second_tokenized = self.tokenizer.tokenize(second_sequence)
+        tokens.extend(second_tokenized[:to_go])
+        sentence_ids = ([torch.unsqueeze(torch.tensor(0), -1)] * to_go) + \
+                ([torch.unsqueeze(torch.tensor(1), -1)] * len(second_sequence[:to_go]))
+        return TvTropesFeature(
+            token_ids=self.tokenizer.convert_tokens_to_ids(tokens),
+            sentence_ids=torch.cat(sentence_ids),
         )
 
 
